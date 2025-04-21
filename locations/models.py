@@ -21,36 +21,30 @@ class DeviceLocation(models.Model):
 
 
 class RideRequest(models.Model):
-    """
-    Novo modelo: representa uma solicitação de corrida do passageiro.
-    """
     RIDE_STATUS_CHOICES = (
         ('pending',   'Pendente'),
         ('accepted',  'Aceita'),
         ('rejected',  'Recusada'),
+        ('cancelled', 'Cancelada'),
         ('completed', 'Concluída'),
     )
 
-    # UUID único de cada corrida (fornecido pelo app ou gerado pelo servidor)
-    ride_id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    # Identificador do passageiro (UUID gerado/armazenado no app)
-    user_id         = models.UUIDField()
-    # Identificador do motorista (device_id)
-    driver_id       = models.CharField(max_length=100)
-    # Coordenadas de pick‑up
-    pickup_latitude = models.DecimalField(max_digits=9, decimal_places=6)
-    pickup_longitude= models.DecimalField(max_digits=9, decimal_places=6)
-    # Status da corrida
-    status          = models.CharField(
-                        max_length=10,
-                        choices=RIDE_STATUS_CHOICES,
-                        default='pending'
-                     )
-    # Quando a solicitação foi criada
-    created_at      = models.DateTimeField(auto_now_add=True)
+    ride_id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id          = models.UUIDField()
+    passenger_name   = models.CharField("Nome do passageiro", max_length=100, blank=True, null=True)
+    driver_id        = models.CharField(max_length=100)
+    driver_name      = models.CharField("Nome do motorista", max_length=100, blank=True, null=True)
+    pickup_latitude  = models.DecimalField(max_digits=9, decimal_places=6)
+    pickup_longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    status           = models.CharField(max_length=10, choices=RIDE_STATUS_CHOICES, default='pending')
+    created_at       = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Ride {self.ride_id} ({self.status})"
+    
+    @classmethod
+    def driver_busy(cls, driver_id):
+        return cls.objects.filter(driver_id=driver_id, status__in=['pending','accepted']).exists()
 
 
 class RidePosition(models.Model):

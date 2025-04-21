@@ -7,7 +7,7 @@ class DeviceLocationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DeviceLocation
-        fields = (
+        fields = (  
             'device_id',
             'device_type',
             'latitude',
@@ -19,18 +19,23 @@ class DeviceLocationSerializer(serializers.ModelSerializer):
 
 
 class RideRequestSerializer(serializers.ModelSerializer):
+    passenger_name = serializers.CharField(required=False, allow_blank=True)
+    driver_name    = serializers.CharField(required=False, allow_blank=True)
+
     class Meta:
         model = RideRequest
         fields = (
             'ride_id',
             'user_id',
+            'passenger_name',
             'driver_id',
+            'driver_name',
             'pickup_latitude',
             'pickup_longitude',
             'status',
             'created_at',
         )
-        read_only_fields = ('created_at',)
+        read_only_fields = ('created_at','status')
 
 
 class RidePositionSerializer(serializers.ModelSerializer):

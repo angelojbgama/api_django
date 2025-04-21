@@ -21,7 +21,9 @@ class RidePositionInline(admin.TabularInline):
 class RideRequestAdmin(admin.ModelAdmin):
     list_display = (
         'ride_id',
+        'passenger_name',
         'user_id',
+        'driver_name',
         'driver_id',
         'pickup_latitude',
         'pickup_longitude',
@@ -29,14 +31,16 @@ class RideRequestAdmin(admin.ModelAdmin):
         'created_at',
     )
     list_filter = ('status', 'created_at')
-    search_fields = ('ride_id', 'user_id', 'driver_id')
+    search_fields = ('ride_id', 'user_id', 'driver_id', 'passenger_name', 'driver_name')
     readonly_fields = ('ride_id', 'created_at')
     fieldsets = (
         (None, {
             'fields': (
                 'ride_id',
                 'user_id',
+                'passenger_name',
                 'driver_id',
+                'driver_name',
                 ('pickup_latitude', 'pickup_longitude'),
                 'status',
                 'created_at',
@@ -45,7 +49,6 @@ class RideRequestAdmin(admin.ModelAdmin):
     )
     inlines = (RidePositionInline,)
     ordering = ('-created_at',)
-
 # ---------------------------------------------------
 # Admin para RidePosition (posição ao longo da corrida)
 # ---------------------------------------------------

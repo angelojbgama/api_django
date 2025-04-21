@@ -6,9 +6,15 @@ from .models import DeviceLocation, RideRequest, RidePosition
 class DeviceLocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeviceLocation
-        fields = ('device_id', 'device_type', 'latitude', 'longitude', 'timestamp')
+        fields = (
+            'device_id',
+            'device_type',
+            'latitude',
+            'longitude',
+            'seats_available',    # <<< inclua aqui
+            'timestamp',
+        )
         read_only_fields = ('timestamp',)
-
 
 class RideRequestSerializer(serializers.ModelSerializer):
     class Meta:

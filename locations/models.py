@@ -4,23 +4,20 @@ from django.db import models
 import uuid
 
 class DeviceLocation(models.Model):
-    """
-    Já existente: armazena cada atualização de localização
-    sem necessidade de cadastro de usuário.
-    """
     DEVICE_TYPES = (
         ('user',   'Usuário'),
         ('driver', 'EcoTaxi'),
     )
 
-    device_id   = models.CharField(max_length=100)
-    device_type = models.CharField(max_length=10, choices=DEVICE_TYPES)
-    latitude    = models.DecimalField(max_digits=9, decimal_places=6)
-    longitude   = models.DecimalField(max_digits=9, decimal_places=6)
-    timestamp   = models.DateTimeField(auto_now_add=True)
+    device_id        = models.CharField(max_length=100)
+    device_type      = models.CharField(max_length=10, choices=DEVICE_TYPES)
+    latitude         = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude        = models.DecimalField(max_digits=9, decimal_places=6)
+    seats_available  = models.IntegerField(default=1)   # <<< novo campo
+    timestamp        = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.device_type} {self.device_id} @ ({self.latitude}, {self.longitude})"
+        return f"{self.device_type} {self.device_id} @ ({self.latitude}, {self.longitude}) - Lugares: {self.seats_available}"
 
 
 class RideRequest(models.Model):

@@ -1,5 +1,4 @@
-# locations/views.py
-
+import logging
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -17,22 +16,28 @@ from .serializers import (
     RidePositionSerializer,
 )
 
+logger = logging.getLogger(__name__)
 
-# --------------------------------------------------
-# 1) POST /api/location/
-#    Recebe latitude, longitude, device_id, device_type e seats_available
-#    Salva DeviceLocation e, se o driver tiver rides aceitas, grava RidePosition
-# --------------------------------------------------
+
 @method_decorator(csrf_exempt, name='dispatch')
 class LocationCreateView(generics.CreateAPIView):
+    """
+    POST /api/location/
+    Recebe JSON com device_id, device_type, latitude, longitude e opcional seats_available.
+    Salva DeviceLocation e, se houver rides accepted, também grava RidePosition.
+    """
     queryset = DeviceLocation.objects.all()
     serializer_class = DeviceLocationSerializer
     permission_classes = [AllowAny]
 
+    def create(self, request, *args, **kwargs):
+        # Loga o que chegou no corpo da requisição
+        logger.info(f"[LocationCreate] dados recebidos: {request.data}")
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
-        # 1) Salva nova localização
         instance = serializer.save()
-        # 2) Para cada corrida já aceita deste motorista, salva posição
+        # Para cada corrida já aceita, grava posição
         accepted = RideRequest.objects.filter(
             driver_id=instance.device_id,
             status='accepted'
@@ -45,16 +50,15 @@ class LocationCreateView(generics.CreateAPIView):
             )
 
 
-# --------------------------------------------------
-# 2) GET /api/drivers/locations/
-#    Retorna última localização de cada motorista (inclui seats_available)
-# --------------------------------------------------
 class DriverLocationListView(generics.ListAPIView):
+    """
+    GET /api/drivers/locations/
+    Retorna última localização (incluindo seats_available) de cada driver
+    """
     serializer_class = DeviceLocationSerializer
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        # Agrupa por device_id e pega o id máximo de cada grupo
         latest_ids = (
             DeviceLocation.objects
             .filter(device_type='driver')
@@ -65,10 +69,6 @@ class DriverLocationListView(generics.ListAPIView):
         return DeviceLocation.objects.filter(id__in=latest_ids)
 
 
-# --------------------------------------------------
-# 3) POST /api/ride/request/
-#    Cria uma nova solicitação de corrida (pending)
-# --------------------------------------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class RideRequestCreateView(generics.CreateAPIView):
     queryset = RideRequest.objects.all()
@@ -76,10 +76,6 @@ class RideRequestCreateView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
 
-# --------------------------------------------------
-# 4) GET /api/ride/status/?ride_id=<uuid>
-#    Retorna status atual da corrida
-# --------------------------------------------------
 class RideStatusView(APIView):
     permission_classes = [AllowAny]
 
@@ -92,10 +88,6 @@ class RideStatusView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-# --------------------------------------------------
-# 5) GET /api/ride/route/?ride_id=<uuid>
-#    Retorna histórico de posições para desenhar a rota
-# --------------------------------------------------
 class RideRouteView(APIView):
     permission_classes = [AllowAny]
 
@@ -110,10 +102,6 @@ class RideRouteView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-# --------------------------------------------------
-# 6) GET /api/ride/pending/?driver_id=<id>
-#    Lista todas as solicitações pendentes para este motorista
-# --------------------------------------------------
 class RidePendingView(APIView):
     permission_classes = [AllowAny]
 
@@ -121,20 +109,14 @@ class RidePendingView(APIView):
         driver_id = request.query_params.get('driver_id')
         if not driver_id:
             return Response({"error": "driver_id é obrigatório"}, status=400)
-
         pendings = RideRequest.objects.filter(
             driver_id=driver_id,
             status='pending'
         ).order_by('created_at')
-
         serializer = RideRequestSerializer(pendings, many=True)
-        return Response(serializer.data, status=200)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-# --------------------------------------------------
-# 7) POST /api/ride/respond/
-#    Recebe ride_id e status ('accepted' ou 'rejected'), atualiza a RideRequest
-# --------------------------------------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class RideRespondView(APIView):
     permission_classes = [AllowAny]
@@ -149,5 +131,3 @@ class RideRespondView(APIView):
             'ride_id': str(ride.ride_id),
             'status':  ride.status
         }, status=status.HTTP_200_OK)
-
-

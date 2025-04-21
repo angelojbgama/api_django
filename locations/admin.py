@@ -1,90 +1,33 @@
-# locations/admin.py
-
 from django.contrib import admin
-from .models import DeviceLocation, RideRequest, RidePosition
+from .models import Passageiro, EcoTaxi, SolicitacaoCorrida
 
-# ---------------------------------------------------
-# Inline para exibir Histórico de Posições na RideRequest
-# ---------------------------------------------------
-class RidePositionInline(admin.TabularInline):
-    model = RidePosition
-    extra = 0
-    readonly_fields = ('latitude', 'longitude', 'timestamp')
-    can_delete = False
-    verbose_name = 'Posição da Corrida'
-    verbose_name_plural = 'Posições da Corrida'
 
-# ---------------------------------------------------
-# Admin para RideRequest (solicitação de corrida)
-# ---------------------------------------------------
-@admin.register(RideRequest)
-class RideRequestAdmin(admin.ModelAdmin):
+@admin.register(Passageiro)
+class PassageiroAdmin(admin.ModelAdmin):
+    list_display = ('nome', 'uuid', 'criado_em')
+    search_fields = ('nome', 'uuid')
+    ordering = ('-criado_em',)
+    readonly_fields = ('uuid', 'criado_em')
+
+
+@admin.register(EcoTaxi)
+class EcoTaxiAdmin(admin.ModelAdmin):
+    list_display = ('nome', 'uuid', 'status', 'assentos_disponiveis', 'latitude', 'longitude', 'atualizado_em')
+    list_filter = ('status',)
+    search_fields = ('nome', 'uuid')
+    ordering = ('-atualizado_em',)
+    readonly_fields = ('uuid', 'atualizado_em')
+
+
+@admin.register(SolicitacaoCorrida)
+class SolicitacaoCorridaAdmin(admin.ModelAdmin):
     list_display = (
-        'ride_id',
-        'passenger_name',
-        'user_id',
-        'driver_name',
-        'driver_id',
-        'pickup_latitude',
-        'pickup_longitude',
-        'status',
-        'created_at',
+        'id', 'passageiro', 'eco_taxi', 'status',
+        'assentos_necessarios', 'endereco_destino',
+        'criada_em', 'expiracao'
     )
-    list_filter = ('status', 'created_at')
-    search_fields = ('ride_id', 'user_id', 'driver_id', 'passenger_name', 'driver_name')
-    readonly_fields = ('ride_id', 'created_at')
-    fieldsets = (
-        (None, {
-            'fields': (
-                'ride_id',
-                'user_id',
-                'passenger_name',
-                'driver_id',
-                'driver_name',
-                ('pickup_latitude', 'pickup_longitude'),
-                'status',
-                'created_at',
-            )
-        }),
-    )
-    inlines = (RidePositionInline,)
-    ordering = ('-created_at',)
-# ---------------------------------------------------
-# Admin para RidePosition (posição ao longo da corrida)
-# ---------------------------------------------------
-@admin.register(RidePosition)
-class RidePositionAdmin(admin.ModelAdmin):
-    list_display = ('ride', 'latitude', 'longitude', 'timestamp')
-    list_filter = ('ride', 'timestamp')
-    search_fields = ('ride__ride_id',)
-    readonly_fields = ('ride', 'latitude', 'longitude', 'timestamp')
-    ordering = ('-timestamp',)
-
-# ---------------------------------------------------
-# Admin para DeviceLocation (última posição de cada device)
-# ---------------------------------------------------
-@admin.register(DeviceLocation)
-class DeviceLocationAdmin(admin.ModelAdmin):
-    list_display = (
-        'device_type',
-        'device_id',
-        'latitude',
-        'longitude',
-        'seats_available',
-        'timestamp',
-    )
-    list_filter = ('device_type', 'seats_available', 'timestamp')
-    search_fields = ('device_id',)
-    readonly_fields = ('timestamp',)
-    fieldsets = (
-        (None, {
-            'fields': (
-                'device_type',
-                'device_id',
-                ('latitude', 'longitude'),
-                'seats_available',
-                'timestamp',
-            )
-        }),
-    )
-    ordering = ('-timestamp',)
+    list_filter = ('status', 'criada_em')
+    search_fields = ('passageiro__nome', 'eco_taxi__nome', 'endereco_destino')
+    ordering = ('-criada_em',)
+    autocomplete_fields = ('passageiro', 'eco_taxi')
+    readonly_fields = ('criada_em', 'expiracao')

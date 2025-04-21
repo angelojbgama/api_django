@@ -1,45 +1,49 @@
 from rest_framework import serializers
-from .models import DeviceLocation, RideRequest, RidePosition
+from .models import Passageiro, EcoTaxi, SolicitacaoCorrida
+from django.utils import timezone
 
-class DeviceLocationSerializer(serializers.ModelSerializer):
-    # Torna seats_available opcional, default 0
-    seats_available = serializers.IntegerField(required=False, default=0)
+# Serializer para Passageiro
+class PassageiroSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Passageiro
+        fields = '__all__'
+
+
+# Serializer para EcoTaxi
+class EcoTaxiSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EcoTaxi
+        fields = '__all__'
+
+
+# Serializer para criação de solicitação de corrida
+class SolicitacaoCorridaCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SolicitacaoCorrida
+        fields = [
+            'passageiro',
+            'latitude_destino',
+            'longitude_destino',
+            'endereco_destino',
+            'assentos_necessarios'
+        ]
+
+    def validate(self, data):
+        # Valida se o passageiro existe
+        if not Passageiro.objects.filter(id=data['passageiro'].id).exists():
+            raise serializers.ValidationError("Passageiro inválido.")
+        return data
+
+    def create(self, validated_data):
+        validated_data['expiracao'] = timezone.now() + timezone.timedelta(minutes=1)
+        return super().create(validated_data)
+
+
+# Serializer para leitura (incluir EcoTaxi e status)
+class SolicitacaoCorridaDetailSerializer(serializers.ModelSerializer):
+    passageiro = PassageiroSerializer()
+    eco_taxi = EcoTaxiSerializer()
 
     class Meta:
-        model = DeviceLocation
-        fields = (  
-            'device_id',
-            'device_type',
-            'latitude',
-            'longitude',
-            'seats_available',
-            'timestamp',
-        )
-        read_only_fields = ('timestamp',)
-
-
-class RideRequestSerializer(serializers.ModelSerializer):
-    passenger_name = serializers.CharField(required=False, allow_blank=True)
-    driver_name    = serializers.CharField(required=False, allow_blank=True)
-
-    class Meta:
-        model = RideRequest
-        fields = (
-            'ride_id',
-            'user_id',
-            'passenger_name',
-            'driver_id',
-            'driver_name',
-            'pickup_latitude',
-            'pickup_longitude',
-            'status',
-            'created_at',
-        )
-        read_only_fields = ('created_at','status')
-
-
-class RidePositionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = RidePosition
-        fields = ('latitude', 'longitude', 'timestamp')
-        read_only_fields = ('timestamp',)
+        model = SolicitacaoCorrida
+        fields = '__all__'

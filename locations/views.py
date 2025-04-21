@@ -119,12 +119,16 @@ class RidePendingView(APIView):
 
     def get(self, request):
         driver_id = request.query_params.get('driver_id')
+        if not driver_id:
+            return Response({"error": "driver_id é obrigatório"}, status=400)
+
         pendings = RideRequest.objects.filter(
             driver_id=driver_id,
             status='pending'
         ).order_by('created_at')
+
         serializer = RideRequestSerializer(pendings, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=200)
 
 
 # --------------------------------------------------
@@ -145,3 +149,5 @@ class RideRespondView(APIView):
             'ride_id': str(ride.ride_id),
             'status':  ride.status
         }, status=status.HTTP_200_OK)
+
+

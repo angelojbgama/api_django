@@ -1,6 +1,10 @@
 import uuid
 from django.db import models
 from django.utils import timezone
+from datetime import timedelta
+
+def default_expiracao():
+        return timezone.now() + timedelta(minutes=1)
 
 # Modelo base com UUID para identificar dispositivos (sem login)
 class DispositivoBase(models.Model):
@@ -59,7 +63,8 @@ class SolicitacaoCorrida(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
 
     criada_em = models.DateTimeField(auto_now_add=True)
-    expiracao = models.DateTimeField(default=lambda: timezone.now() + timezone.timedelta(minutes=1))
+    
+    expiracao = models.DateTimeField(default=default_expiracao)
 
     def __str__(self):
         return f"Corrida de {self.passageiro.nome} para {self.endereco_destino or 'Destino'} ({self.get_status_display()})"

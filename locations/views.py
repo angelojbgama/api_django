@@ -40,7 +40,17 @@ class LocationCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         instance = serializer.save()
-        # Para cada corrida já aceita, grava posição
+
+        # Atualiza também o nome do motorista, se enviado
+        if instance.device_type == 'driver' and 'driver_name' in self.request.data:
+            name = self.request.data['driver_name']
+            # Atualiza nome do motorista em rides pendentes ou aceitas
+            RideRequest.objects.filter(
+                driver_id=instance.device_id,
+                status__in=['pending', 'accepted']
+            ).update(driver_name=name)
+
+        # Salva posição se corrida estiver em andamento
         accepted = RideRequest.objects.filter(
             driver_id=instance.device_id,
             status='accepted'

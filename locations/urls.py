@@ -2,11 +2,14 @@ from django.urls import path
 from .views import (
     CriarCorridaView,
     CorridaDetailView,
-    AtualizarStatusCorridaView
+    AtualizarStatusCorridaView,
+    PassageiroCreateView
 )
 
 urlpatterns = [
     path('corrida/nova/', CriarCorridaView.as_view(), name='nova_corrida'),
     path('corrida/<int:pk>/', CorridaDetailView.as_view(), name='detalhe_corrida'),
     path('corrida/<int:pk>/status/', AtualizarStatusCorridaView.as_view(), name='atualizar_status_corrida'),
+    path('passageiro/', PassageiroCreateView.as_view(), name='criar_passageiro'),
+
 ]

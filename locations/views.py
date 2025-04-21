@@ -11,6 +11,8 @@ from geopy.distance import geodesic
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from rest_framework.generics import get_object_or_404
+from .models import Passageiro
+from .serializers import PassageiroSerializer
 
 
 class AtualizarStatusCorridaView(APIView):
@@ -82,3 +84,9 @@ class CorridaDetailView(generics.RetrieveAPIView):
             corrida.save()
 
         return corrida
+
+# views.py
+
+class PassageiroCreateView(generics.CreateAPIView):
+    queryset = Passageiro.objects.all()
+    serializer_class = PassageiroSerializer

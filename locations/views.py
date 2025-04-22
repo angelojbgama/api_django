@@ -55,19 +55,26 @@ def buscar_ecotaxi_proximo(lat, lon, assentos_necessarios=1):
 class CriarCorridaView(generics.CreateAPIView):
     serializer_class = SolicitacaoCorridaCreateSerializer
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         corrida = serializer.save()
+
         eco_taxi = buscar_ecotaxi_proximo(
             corrida.latitude_destino,
             corrida.longitude_destino,
             corrida.assentos_necessarios
         )
+
         if eco_taxi:
             corrida.eco_taxi = eco_taxi
             corrida.save()
         else:
             corrida.status = 'expired'
             corrida.save()
+
+        response_serializer = SolicitacaoCorridaDetailSerializer(corrida)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
 # View para visualizar uma corrida detalhada

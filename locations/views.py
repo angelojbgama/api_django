@@ -271,3 +271,18 @@ class AtualizarNomePassageiroView(APIView):
         passageiro.nome = novo_nome
         passageiro.save()
         return Response({"mensagem": "Nome atualizado com sucesso."}, status=status.HTTP_200_OK)
+
+
+class AtualizarNomeEcoTaxiView(APIView):
+    permission_classes = [AllowAny]
+
+    def patch(self, request, pk):
+        novo_nome = request.data.get("nome")
+        if not novo_nome:
+            return Response({"erro": "Nome não fornecido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ecotaxi = get_object_or_404(EcoTaxi, pk=pk)
+        ecotaxi.nome = novo_nome
+        ecotaxi.save()
+
+        return Response({"mensagem": "Nome atualizado com sucesso.", "novo_nome": ecotaxi.nome}, status=status.HTTP_200_OK)

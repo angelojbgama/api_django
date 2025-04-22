@@ -61,3 +61,7 @@ class CorridaEcoTaxiListSerializer(serializers.ModelSerializer):
             'status',
             'expiracao'
         ]
+class PassageiroSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Passageiro
+        fields = ['id', 'nome', 'uuid', 'criado_em']

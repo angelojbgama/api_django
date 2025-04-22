@@ -216,13 +216,42 @@ class CorridasDoPassageiroView(ListAPIView):
         return SolicitacaoCorrida.objects.filter(passageiro_id=passageiro_id).order_by('-criada_em')
 
 
-class AtualizarNomeView(APIView):
-    def patch(self, request, pk):
-        passageiro = get_object_or_404(Passageiro, pk=pk)
-        novo_nome = request.data.get("nome")
-        if not novo_nome:
-            return Response({"erro": "Nome não fornecido."}, status=400)
+class AtualizarNomeDispositivoView(APIView):
+    """
+    Endpoint para atualizar o nome de um Passageiro ou EcoTaxi baseado no ID fornecido.
+    """
 
-        passageiro.nome = novo_nome
-        passageiro.save()
-        return Response(PassageiroSerializer(passageiro).data)
+    def patch(self, request, pk):
+        nome = request.data.get("nome")
+        if not nome:
+            return Response({"erro": "Nome não fornecido"}, status=status.HTTP_400_BAD_REQUEST)
+
+        dispositivo = None
+
+        # Tenta encontrar o dispositivo como Passageiro
+        try:
+            dispositivo = Passageiro.objects.get(pk=pk)
+        except Passageiro.DoesNotExist:
+            pass
+
+        # Se não for passageiro, tenta como EcoTaxi
+        if not dispositivo:
+            try:
+                dispositivo = EcoTaxi.objects.get(pk=pk)
+            except EcoTaxi.DoesNotExist:
+                return Response({"erro": "Dispositivo não encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        dispositivo.nome = nome
+        dispositivo.save()
+        return Response({"mensagem": "Nome atualizado com sucesso."}, status=status.HTTP_200_OK)
+
+class PassageiroDetailView(APIView):
+    """
+    Retorna os dados de um passageiro pelo ID.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        passageiro = get_object_or_404(Passageiro, pk=pk)
+        serializer = PassageiroSerializer(passageiro)
+        return Response(serializer.data)

@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    AtualizarNomeDispositivoView,
     AtualizarNomeView,
     CorridaAtivaPassageiroView,
     CorridasDoPassageiroView,
@@ -10,7 +11,8 @@ from .views import (
     AtualizarStatusCorridaView,
     EcoTaxiCreateView,
     EcoTaxiUpdateView,
-    PassageiroCreateView
+    PassageiroCreateView,
+    PassageiroDetailView
 )
 
 urlpatterns = [
@@ -24,6 +26,7 @@ urlpatterns = [
     path('ecotaxi/<int:pk>/historico/', CorridasEcoTaxiHistoricoView.as_view(), name='historico_ecotaxi'),
     path('corrida/ativa/<int:passageiro_id>/', CorridaAtivaPassageiroView.as_view(), name='corrida_ativa'),
     path('passageiro/<int:passageiro_id>/corridas/', CorridasDoPassageiroView.as_view(), name='corridas_passageiro'),
-    path('passageiro/<int:pk>/atualizar_nome/', AtualizarNomeView.as_view(), name='atualizar_nome_passageiro'),
+    path('dispositivo/<int:pk>/atualizar_nome/', AtualizarNomeDispositivoView.as_view(), name='atualizar_nome_dispositivo'),
+    path('passageiro/<int:pk>/', PassageiroDetailView.as_view()),  # para GET do nome atual
 
 ]

@@ -89,12 +89,13 @@ class AtualizarStatusCorridaView(APIView):
             return Response({"mensagem": "Corrida foi repassada ao próximo EcoTaxi."}, status=200)
 
         # ✅ Cancelada: marca como cancelada se ainda não estiver completada
-        if novo_status == 'cancelled' and corrida.status != 'completed':
-            corrida.status = 'cancelled'
-            corrida.save()
+        if novo_status == 'cancelled':
+            if corrida.status != 'completed':
+                corrida.status = 'cancelled'
+                corrida.save()
             return Response({"mensagem": "Corrida cancelada com sucesso."}, status=200)
 
-        # ✅ Atualiza status normalmente, mesmo que já esteja cancelada, para permitir limpar estados no frontend
+        # ✅ Atualiza status normalmente, mesmo que já esteja cancelada
         corrida.status = novo_status
         corrida.save()
         return Response({"mensagem": f"Status da corrida atualizado para '{novo_status}'."}, status=200)

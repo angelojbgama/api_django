@@ -15,6 +15,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.generics import get_object_or_404
 from .models import Passageiro
 from .serializers import PassageiroSerializer
+from rest_framework.generics import ListAPIView
 
 
 
@@ -202,3 +203,11 @@ class CorridaAtivaPassageiroView(APIView):
             serializer = SolicitacaoCorridaDetailSerializer(corrida)
             return Response(serializer.data)
         return Response({'corrida': None})
+    
+
+class CorridasDoPassageiroView(ListAPIView):
+    serializer_class = SolicitacaoCorridaDetailSerializer
+
+    def get_queryset(self):
+        passageiro_id = self.kwargs['passageiro_id']
+        return SolicitacaoCorrida.objects.filter(passageiro_id=passageiro_id).order_by('-criada_em')

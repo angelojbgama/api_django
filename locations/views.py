@@ -66,8 +66,8 @@ def buscar_ecotaxi_proximo(lat, lon, assentos_necessarios=1):
 
 class AtualizarStatusCorridaView(APIView):
     """
-    View para aceitar, recusar, cancelar ou finalizar uma corrida.
-    Agora aceita PUT e PATCH.
+    View para aceitar, iniciar, recusar, cancelar ou finalizar uma corrida.
+    Aceita PUT e PATCH.
     """
     permission_classes = [AllowAny]
 
@@ -75,13 +75,16 @@ class AtualizarStatusCorridaView(APIView):
         corrida = get_object_or_404(SolicitacaoCorrida, pk=pk)
         novo_status = request.data.get("status")
 
-        if novo_status not in ['accepted', 'rejected', 'cancelled', 'completed']:
+        # ✅ Permitimos agora também 'started'
+        status_validos = ['accepted', 'started', 'rejected', 'cancelled', 'completed']
+        if novo_status not in status_validos:
             return Response({"erro": "Status inválido."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # ✅ Bloqueia alterações se a corrida estiver finalizada ou cancelada
         if corrida.status in ['completed', 'cancelled']:
             return Response({"erro": "Corrida já finalizada ou cancelada."}, status=400)
 
-        # Rejeitada: repassa para outro EcoTaxi
+        # 🔁 Rejeitada: repassa para outro EcoTaxi
         if novo_status == 'rejected':
             corrida.eco_taxi = None
             corrida.status = 'pending'
@@ -90,15 +93,19 @@ class AtualizarStatusCorridaView(APIView):
             repassar_para_proximo_ecotaxi(corrida)
             return Response({"mensagem": "Corrida foi repassada ao próximo EcoTaxi."}, status=200)
 
-        # Outros casos: apenas atualiza o status
+        # ✅ Cancelada: volta para disponível ou expirada
+        if novo_status == 'cancelled':
+            corrida.status = 'cancelled'
+            corrida.save()
+            return Response({"mensagem": "Corrida cancelada com sucesso."}, status=200)
+
+        # ✅ Começar ou finalizar: apenas atualiza
         corrida.status = novo_status
         corrida.save()
         return Response({"mensagem": f"Status da corrida atualizado para '{novo_status}'."}, status=200)
 
     def patch(self, request, pk):
-        # Permite PATCH como alternativa a PUT
         return self.put(request, pk)
-
 
 # Função utilitária: buscar EcoTaxis próximos
 

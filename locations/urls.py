@@ -72,4 +72,10 @@ urlpatterns = [
         DispositivoRetrieveUpdateView.as_view(),
         name="dispositivo_retrieve_update",
     ),
+    path(
+    "passageiro/<int:passageiro_id>/corridas/",
+    CorridasDoPassageiroView.as_view(),
+    name="corridas_passageiro_alias",
+),
+
 ]

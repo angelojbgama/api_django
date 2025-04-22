@@ -4,7 +4,7 @@ from django.utils import timezone
 from datetime import timedelta
 
 def default_expiracao():
-        return timezone.now() + timedelta(minutes=1)
+        return timezone.now() + timedelta(minutes=5)
 
 # Modelo base com UUID para identificar dispositivos (sem login)
 class DispositivoBase(models.Model):

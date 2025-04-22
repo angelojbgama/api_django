@@ -249,6 +249,7 @@ class AtualizarNomeDispositivoView(APIView):
 class PassageiroDetailView(APIView):
     """
     Retorna os dados de um passageiro pelo ID.
+    Endpoint: /passageiro/<pk>/
     """
     permission_classes = [AllowAny]
 
@@ -258,8 +259,11 @@ class PassageiroDetailView(APIView):
         return Response(serializer.data)
 
 
-
 class AtualizarNomePassageiroView(APIView):
+    """
+    Atualiza o nome de um passageiro via PATCH.
+    Endpoint: /passageiro/<pk>/atualizar_nome/
+    """
     permission_classes = [AllowAny]
 
     def patch(self, request, pk):
@@ -275,6 +279,10 @@ class AtualizarNomePassageiroView(APIView):
 
 
 class AtualizarNomeEcoTaxiView(APIView):
+    """
+    Atualiza o nome de um EcoTaxi via PATCH.
+    Endpoint: /ecotaxi/<pk>/atualizar_nome/
+    """
     permission_classes = [AllowAny]
 
     def patch(self, request, pk):
@@ -286,9 +294,17 @@ class AtualizarNomeEcoTaxiView(APIView):
         ecotaxi.nome = novo_nome
         ecotaxi.save()
 
-        return Response({"mensagem": "Nome atualizado com sucesso.", "novo_nome": ecotaxi.nome})
+        return Response({
+            "mensagem": "Nome atualizado com sucesso.",
+            "novo_nome": ecotaxi.nome
+        }, status=status.HTTP_200_OK)
+
 
 
 class EcoTaxiRetrieveView(RetrieveAPIView):
+    """
+    Retorna os dados do EcoTaxi pelo ID.
+    Endpoint: /ecotaxi/<pk>/
+    """
     queryset = EcoTaxi.objects.all()
     serializer_class = EcoTaxiSerializer

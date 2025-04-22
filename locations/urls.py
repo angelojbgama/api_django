@@ -9,6 +9,7 @@ from .views import (
     CriarCorridaView,
     CorridaDetailView,
     AtualizarStatusCorridaView,
+    DeletarDispositivoPorUUIDView,
     EcoTaxiCreateView,
     EcoTaxiRetrieveView,
     EcoTaxiUpdateView,
@@ -35,5 +36,6 @@ urlpatterns = [
     path("ecotaxi/<int:pk>/historico/", CorridasEcoTaxiHistoricoView.as_view(), name="historico_ecotaxi"),
     path("ecotaxi/<int:pk>/", EcoTaxiUpdateView.as_view(), name="atualizar_ecotaxi"),
     path('dispositivo/<uuid:uuid>/tipo/', TipoDispositivoView.as_view()),
+    path('dispositivo/<uuid:uuid>/deletar/', DeletarDispositivoPorUUIDView.as_view(), name='deletar_dispositivo_por_uuid'),
 
 ]

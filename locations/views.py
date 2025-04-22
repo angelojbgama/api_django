@@ -326,3 +326,28 @@ class TipoDispositivoView(APIView):
             return Response({'tipo': 'ecotaxi', 'id': ecotaxi.id})
         except EcoTaxi.DoesNotExist:
             return Response({'tipo': None, 'id': None})
+
+
+class DeletarDispositivoPorUUIDView(APIView):
+    """
+    Deleta um Passageiro ou EcoTaxi com base no UUID fornecido.
+    """
+    def delete(self, request, uuid):
+        deletado = False
+
+        # Tenta deletar Passageiro
+        passageiros = Passageiro.objects.filter(uuid=uuid)
+        if passageiros.exists():
+            passageiros.delete()
+            deletado = True
+
+        # Tenta deletar EcoTaxi
+        ecotaxis = EcoTaxi.objects.filter(uuid=uuid)
+        if ecotaxis.exists():
+            ecotaxis.delete()
+            deletado = True
+
+        if deletado:
+            return Response({"mensagem": "Dispositivo deletado com sucesso."}, status=status.HTTP_200_OK)
+        else:
+            return Response({"erro": "Nenhum dispositivo encontrado com esse UUID."}, status=status.HTTP_404_NOT_FOUND)

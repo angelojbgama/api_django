@@ -75,14 +75,9 @@ class AtualizarStatusCorridaView(APIView):
         corrida = get_object_or_404(SolicitacaoCorrida, pk=pk)
         novo_status = request.data.get("status")
 
-        # ✅ Permitimos agora também 'started'
         status_validos = ['accepted', 'started', 'rejected', 'cancelled', 'completed']
         if novo_status not in status_validos:
             return Response({"erro": "Status inválido."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # ✅ Bloqueia alterações se a corrida estiver finalizada ou cancelada
-        if corrida.status in ['completed', 'cancelled']:
-            return Response({"erro": "Corrida já finalizada ou cancelada."}, status=400)
 
         # 🔁 Rejeitada: repassa para outro EcoTaxi
         if novo_status == 'rejected':
@@ -93,13 +88,13 @@ class AtualizarStatusCorridaView(APIView):
             repassar_para_proximo_ecotaxi(corrida)
             return Response({"mensagem": "Corrida foi repassada ao próximo EcoTaxi."}, status=200)
 
-        # ✅ Cancelada: volta para disponível ou expirada
-        if novo_status == 'cancelled':
+        # ✅ Cancelada: marca como cancelada se ainda não estiver completada
+        if novo_status == 'cancelled' and corrida.status != 'completed':
             corrida.status = 'cancelled'
             corrida.save()
             return Response({"mensagem": "Corrida cancelada com sucesso."}, status=200)
 
-        # ✅ Começar ou finalizar: apenas atualiza
+        # ✅ Atualiza status normalmente, mesmo que já esteja cancelada, para permitir limpar estados no frontend
         corrida.status = novo_status
         corrida.save()
         return Response({"mensagem": f"Status da corrida atualizado para '{novo_status}'."}, status=200)

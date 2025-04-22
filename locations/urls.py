@@ -13,7 +13,8 @@ from .views import (
     EcoTaxiRetrieveView,
     EcoTaxiUpdateView,
     PassageiroCreateView,
-    PassageiroDetailView
+    PassageiroDetailView,
+    TipoDispositivoView
 )
 
 urlpatterns = [
@@ -33,4 +34,6 @@ urlpatterns = [
     path("ecotaxi/<int:pk>/corridas/", CorridasParaEcoTaxiView.as_view(), name="corridas_para_ecotaxi"),
     path("ecotaxi/<int:pk>/historico/", CorridasEcoTaxiHistoricoView.as_view(), name="historico_ecotaxi"),
     path("ecotaxi/<int:pk>/", EcoTaxiUpdateView.as_view(), name="atualizar_ecotaxi"),
+    path('dispositivo/<uuid:uuid>/tipo/', TipoDispositivoView.as_view()),
+
 ]

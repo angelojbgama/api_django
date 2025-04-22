@@ -308,3 +308,21 @@ class EcoTaxiRetrieveView(RetrieveAPIView):
     """
     queryset = EcoTaxi.objects.all()
     serializer_class = EcoTaxiSerializer
+
+
+class TipoDispositivoView(APIView):
+    """
+    Verifica se o UUID corresponde a um passageiro ou ecotaxi e retorna tipo e id.
+    """
+    def get(self, request, uuid):
+        try:
+            passageiro = Passageiro.objects.get(uuid=uuid)
+            return Response({'tipo': 'passageiro', 'id': passageiro.id})
+        except Passageiro.DoesNotExist:
+            pass
+
+        try:
+            ecotaxi = EcoTaxi.objects.get(uuid=uuid)
+            return Response({'tipo': 'ecotaxi', 'id': ecotaxi.id})
+        except EcoTaxi.DoesNotExist:
+            return Response({'tipo': None, 'id': None})

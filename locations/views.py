@@ -233,3 +233,26 @@ class DispositivoRetrieveUpdateView(generics.RetrieveUpdateAPIView):
     queryset         = Dispositivo.objects.all()
     serializer_class = DispositivoSerializer
     lookup_field     = 'uuid'
+
+
+class CorridasPorUUIDView(ListAPIView):
+    """
+    Devolve histórico completo ligado a um UUID.
+    • Se o dispositivo é *passageiro*  → todas as corridas dele.
+    • Se é *ecotaxi*                  → corridas already accepted|completed.
+    """
+    serializer_class = SolicitacaoCorridaDetailSerializer
+
+    def get_queryset(self):
+        dispositivo = get_object_or_404(Dispositivo, uuid=self.kwargs["uuid"])
+
+        if dispositivo.tipo == "passageiro":
+            return SolicitacaoCorrida.objects.filter(
+                passageiro=dispositivo
+            ).order_by("-criada_em")
+
+        # EcoTaxi
+        return SolicitacaoCorrida.objects.filter(
+            eco_taxi=dispositivo,
+            status__in=["accepted", "completed"]
+        ).order_by("-criada_em")

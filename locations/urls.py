@@ -1,6 +1,7 @@
 # api/urls.py
 from django.urls import path
 from .views import (
+    CorridasPorUUIDView,
     CriarCorridaView,
     CorridaDetailView,
     AtualizarStatusCorridaView,
@@ -72,10 +73,11 @@ urlpatterns = [
         DispositivoRetrieveUpdateView.as_view(),
         name="dispositivo_retrieve_update",
     ),
-    path(
-    "passageiro/<int:passageiro_id>/corridas/",
-    CorridasDoPassageiroView.as_view(),
-    name="corridas_passageiro_alias",
-),
+        path(
+        "corrida/uuid/<uuid:uuid>/",
+        CorridasPorUUIDView.as_view(),
+        name="corridas_por_uuid",
+    ),
+
 
 ]

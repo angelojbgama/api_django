@@ -11,6 +11,7 @@ from .views import (
     CorridaDetailView,
     AtualizarStatusCorridaView,
     EcoTaxiCreateView,
+    EcoTaxiRetrieveView,
     EcoTaxiUpdateView,
     PassageiroCreateView,
     PassageiroDetailView
@@ -30,6 +31,7 @@ urlpatterns = [
     path('dispositivo/<int:pk>/atualizar_nome/', AtualizarNomeDispositivoView.as_view(), name='atualizar_nome_dispositivo'),
     path('passageiro/<int:pk>/', PassageiroDetailView.as_view()),  # para GET do nome atual
     path("passageiro/<int:pk>/atualizar_nome/", AtualizarNomePassageiroView.as_view()),
-    path("ecotaxi/<int:pk>/atualizar_nome/", AtualizarNomeEcoTaxiView.as_view(), name="atualizar_nome_ecotaxi"),
+    path('ecotaxi/<int:pk>/', EcoTaxiRetrieveView.as_view()),
+    path('ecotaxi/<int:pk>/atualizar_nome/', AtualizarNomeEcoTaxiView.as_view()),
 
 ]

@@ -16,6 +16,7 @@ from rest_framework.generics import get_object_or_404
 from .models import Passageiro
 from .serializers import PassageiroSerializer
 from rest_framework.generics import ListAPIView
+from rest_framework.generics import RetrieveAPIView
 
 
 
@@ -286,3 +287,8 @@ class AtualizarNomeEcoTaxiView(APIView):
         ecotaxi.save()
 
         return Response({"mensagem": "Nome atualizado com sucesso.", "novo_nome": ecotaxi.nome})
+
+
+class EcoTaxiRetrieveView(RetrieveAPIView):
+    queryset = EcoTaxi.objects.all()
+    serializer_class = EcoTaxiSerializer

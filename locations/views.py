@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.db.models import F
 from .models import SolicitacaoCorrida, EcoTaxi, default_expiracao
 from .serializers import (
+    CorridaEcoTaxiListSerializer,
     SolicitacaoCorridaCreateSerializer,
     SolicitacaoCorridaDetailSerializer
 )
@@ -148,3 +149,19 @@ class PassageiroCreateView(generics.CreateAPIView):
 
 
 
+
+
+# views.py
+class CorridasParaEcoTaxiView(generics.ListAPIView):
+    serializer_class = CorridaEcoTaxiListSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        eco_taxi_id = self.kwargs['pk']
+        agora = timezone.now()
+
+        return SolicitacaoCorrida.objects.filter(
+            eco_taxi__id=eco_taxi_id,
+            status='pending',
+            expiracao__gte=agora  # ainda válidas
+        ).order_by('expiracao')

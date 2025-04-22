@@ -47,3 +47,17 @@ class SolicitacaoCorridaDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = SolicitacaoCorrida
         fields = '__all__'
+
+# Serializer para listar corridas atribuídas ao EcoTaxi
+class CorridaEcoTaxiListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SolicitacaoCorrida
+        fields = [
+            'id',
+            'endereco_destino',
+            'latitude_destino',
+            'longitude_destino',
+            'assentos_necessarios',
+            'status',
+            'expiracao'
+        ]

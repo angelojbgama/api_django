@@ -255,3 +255,19 @@ class PassageiroDetailView(APIView):
         passageiro = get_object_or_404(Passageiro, pk=pk)
         serializer = PassageiroSerializer(passageiro)
         return Response(serializer.data)
+
+
+
+class AtualizarNomePassageiroView(APIView):
+    permission_classes = [AllowAny]
+
+    def patch(self, request, pk):
+        passageiro = get_object_or_404(Passageiro, pk=pk)
+        novo_nome = request.data.get("nome")
+
+        if not novo_nome:
+            return Response({"erro": "Nome não informado."}, status=status.HTTP_400_BAD_REQUEST)
+
+        passageiro.nome = novo_nome
+        passageiro.save()
+        return Response({"mensagem": "Nome atualizado com sucesso."}, status=status.HTTP_200_OK)

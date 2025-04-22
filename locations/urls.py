@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     AtualizarNomeDispositivoView,
+    AtualizarNomePassageiroView,
     CorridaAtivaPassageiroView,
     CorridasDoPassageiroView,
     CorridasEcoTaxiHistoricoView,
@@ -27,5 +28,6 @@ urlpatterns = [
     path('passageiro/<int:passageiro_id>/corridas/', CorridasDoPassageiroView.as_view(), name='corridas_passageiro'),
     path('dispositivo/<int:pk>/atualizar_nome/', AtualizarNomeDispositivoView.as_view(), name='atualizar_nome_dispositivo'),
     path('passageiro/<int:pk>/', PassageiroDetailView.as_view()),  # para GET do nome atual
+    path("passageiro/<int:pk>/atualizar_nome/", AtualizarNomePassageiroView.as_view()),
 
 ]

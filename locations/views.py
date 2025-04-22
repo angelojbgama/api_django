@@ -172,3 +172,9 @@ class EcoTaxiCreateView(generics.CreateAPIView):
     queryset = EcoTaxi.objects.all()
     serializer_class = EcoTaxiSerializer
     permission_classes = [AllowAny]
+
+
+class EcoTaxiUpdateView(generics.UpdateAPIView):
+    queryset = EcoTaxi.objects.all()
+    serializer_class = EcoTaxiSerializer
+    permission_classes = [AllowAny]

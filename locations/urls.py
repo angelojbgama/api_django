@@ -7,7 +7,7 @@ from .views import (
     CorridaAtivaPassageiroView,
     # Dispositivo
     DispositivoCreateView, DispositivoDetailView,
-    AtualizarNomeDispositivoView, AtualizarTipoDispositivoView,
+    AtualizarNomeDispositivoView, AtualizarTipoDispositivoView, DispositivoRetrieveUpdateView,
     TipoDispositivoView, DeletarDispositivoPorUUIDView
 )
 
@@ -28,4 +28,5 @@ urlpatterns = [
     path('dispositivo/<uuid:uuid>/atualizar_tipo/', AtualizarTipoDispositivoView.as_view(), name='atualizar_tipo_dispositivo'),  # ⭐️
     path('dispositivo/<uuid:uuid>/tipo/', TipoDispositivoView.as_view(), name='tipo_dispositivo'),
     path('dispositivo/<uuid:uuid>/deletar/', DeletarDispositivoPorUUIDView.as_view(), name='deletar_dispositivo'),
+    path('dispositivo/<uuid:uuid>/', DispositivoRetrieveUpdateView.as_view(),name='dispositivo_retrieve_update'),
 ]

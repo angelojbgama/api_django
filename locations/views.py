@@ -227,3 +227,13 @@ class DispositivoViewSet(ModelViewSet):
     queryset = Dispositivo.objects.all()
     serializer_class = DispositivoSerializer
     lookup_field = "uuid"
+
+
+class DispositivoRetrieveUpdateView(generics.RetrieveUpdateAPIView):
+    """
+    GET  -> devolve dados do dispositivo (por UUID)
+    PATCH/PUT -> atualiza nome, tipo ou qualquer outro campo permitido
+    """
+    queryset         = Dispositivo.objects.all()
+    serializer_class = DispositivoSerializer
+    lookup_field     = 'uuid'

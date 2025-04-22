@@ -214,3 +214,15 @@ class CorridasDoPassageiroView(ListAPIView):
     def get_queryset(self):
         passageiro_id = self.kwargs['passageiro_id']
         return SolicitacaoCorrida.objects.filter(passageiro_id=passageiro_id).order_by('-criada_em')
+
+
+class AtualizarNomeView(APIView):
+    def patch(self, request, pk):
+        passageiro = get_object_or_404(Passageiro, pk=pk)
+        novo_nome = request.data.get("nome")
+        if not novo_nome:
+            return Response({"erro": "Nome não fornecido."}, status=400)
+
+        passageiro.nome = novo_nome
+        passageiro.save()
+        return Response(PassageiroSerializer(passageiro).data)

@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    AtualizarNomeView,
     CorridaAtivaPassageiroView,
     CorridasDoPassageiroView,
     CorridasEcoTaxiHistoricoView,
@@ -23,5 +24,6 @@ urlpatterns = [
     path('ecotaxi/<int:pk>/historico/', CorridasEcoTaxiHistoricoView.as_view(), name='historico_ecotaxi'),
     path('corrida/ativa/<int:passageiro_id>/', CorridaAtivaPassageiroView.as_view(), name='corrida_ativa'),
     path('passageiro/<int:passageiro_id>/corridas/', CorridasDoPassageiroView.as_view(), name='corridas_passageiro'),
+    path('passageiro/<int:pk>/atualizar_nome/', AtualizarNomeView.as_view(), name='atualizar_nome_passageiro'),
 
 ]

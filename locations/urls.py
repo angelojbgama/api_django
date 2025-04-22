@@ -4,6 +4,7 @@ from .views import (
     CriarCorridaView,
     CorridaDetailView,
     AtualizarStatusCorridaView,
+    EcoTaxiCreateView,
     PassageiroCreateView
 )
 
@@ -13,5 +14,6 @@ urlpatterns = [
     path('corrida/<int:pk>/status/', AtualizarStatusCorridaView.as_view(), name='atualizar_status_corrida'),
     path('passageiro/', PassageiroCreateView.as_view(), name='criar_passageiro'),
     path('ecotaxi/<int:pk>/corridas/', CorridasParaEcoTaxiView.as_view(), name='corridas_para_ecotaxi'),
+    path('ecotaxi/', EcoTaxiCreateView.as_view(), name='criar_ecotaxi'),
 
 ]

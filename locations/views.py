@@ -5,6 +5,7 @@ from django.db.models import F
 from .models import SolicitacaoCorrida, EcoTaxi, default_expiracao
 from .serializers import (
     CorridaEcoTaxiListSerializer,
+    EcoTaxiSerializer,
     SolicitacaoCorridaCreateSerializer,
     SolicitacaoCorridaDetailSerializer
 )
@@ -165,3 +166,9 @@ class CorridasParaEcoTaxiView(generics.ListAPIView):
             status='pending',
             expiracao__gte=agora  # ainda válidas
         ).order_by('expiracao')
+
+
+class EcoTaxiCreateView(generics.CreateAPIView):
+    queryset = EcoTaxi.objects.all()
+    serializer_class = EcoTaxiSerializer
+    permission_classes = [AllowAny]

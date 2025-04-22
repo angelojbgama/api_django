@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    CorridasEcoTaxiHistoricoView,
     CorridasParaEcoTaxiView,
     CriarCorridaView,
     CorridaDetailView,
@@ -17,5 +18,6 @@ urlpatterns = [
     path('ecotaxi/<int:pk>/corridas/', CorridasParaEcoTaxiView.as_view(), name='corridas_para_ecotaxi'),
     path('ecotaxi/', EcoTaxiCreateView.as_view(), name='criar_ecotaxi'),
     path("ecotaxi/<int:pk>/", EcoTaxiUpdateView.as_view(), name="atualizar_ecotaxi"),
+    path('ecotaxi/<int:pk>/historico/', CorridasEcoTaxiHistoricoView.as_view(), name='historico_ecotaxi'),
 
 ]

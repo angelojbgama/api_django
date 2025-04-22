@@ -178,3 +178,15 @@ class EcoTaxiUpdateView(generics.UpdateAPIView):
     queryset = EcoTaxi.objects.all()
     serializer_class = EcoTaxiSerializer
     permission_classes = [AllowAny]
+
+
+class CorridasEcoTaxiHistoricoView(generics.ListAPIView):
+    serializer_class = CorridaEcoTaxiListSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        eco_taxi_id = self.kwargs['pk']
+        return SolicitacaoCorrida.objects.filter(
+            eco_taxi__id=eco_taxi_id,
+            status__in=['accepted', 'completed']
+        ).order_by('-criada_em')

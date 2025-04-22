@@ -190,3 +190,15 @@ class CorridasEcoTaxiHistoricoView(generics.ListAPIView):
             eco_taxi__id=eco_taxi_id,
             status__in=['accepted', 'completed']
         ).order_by('-criada_em')
+
+class CorridaAtivaPassageiroView(APIView):
+    def get(self, request, passageiro_id):
+        corrida = SolicitacaoCorrida.objects.filter(
+            passageiro_id=passageiro_id,
+            status__in=['pending', 'accepted']
+        ).order_by('-criada_em').first()
+
+        if corrida:
+            serializer = SolicitacaoCorridaDetailSerializer(corrida)
+            return Response(serializer.data)
+        return Response({'corrida': None})

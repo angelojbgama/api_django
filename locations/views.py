@@ -200,10 +200,6 @@ class AtualizarTipoDispositivoView(APIView):
         return Response({"mensagem": "Tipo de conta atualizado com sucesso."})
 
 
-class DispositivoDetailView(generics.RetrieveAPIView):
-    queryset = Dispositivo.objects.all()
-    serializer_class = DispositivoSerializer
-    lookup_field = "uuid"
 
 
 class TipoDispositivoView(APIView):

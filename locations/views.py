@@ -7,25 +7,26 @@ from .serializers import (
     CorridaEcoTaxiListSerializer,
     SolicitacaoCorridaCreateSerializer,
     SolicitacaoCorridaDetailSerializer,
-    DispositivoSerializer
+    DispositivoSerializer,
 )
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from rest_framework.generics import get_object_or_404, ListAPIView, RetrieveAPIView
 from geopy.distance import geodesic
+from rest_framework.viewsets import ModelViewSet
 
 
 def repassar_para_proximo_ecotaxi(corrida):
     ecotaxis_disponiveis = Dispositivo.objects.filter(
-        tipo='ecotaxi',
-        status='aguardando',
-        assentos_disponiveis__gte=corrida.assentos_necessarios
+        tipo="ecotaxi",
+        status="aguardando",
+        assentos_disponiveis__gte=corrida.assentos_necessarios,
     )
     if corrida.eco_taxi:
         ecotaxis_disponiveis = ecotaxis_disponiveis.exclude(id=corrida.eco_taxi.id)
 
     if not ecotaxis_disponiveis.exists():
-        corrida.status = 'expired'
+        corrida.status = "expired"
         corrida.save()
         return
 
@@ -33,21 +34,21 @@ def repassar_para_proximo_ecotaxi(corrida):
         ecotaxis_disponiveis,
         key=lambda e: geodesic(
             (corrida.latitude_destino, corrida.longitude_destino),
-            (e.latitude, e.longitude)
-        ).meters
+            (e.latitude, e.longitude),
+        ).meters,
     )[0]
 
     corrida.eco_taxi = eco_mais_proximo
-    corrida.status = 'pending'
+    corrida.status = "pending"
     corrida.expiracao = default_expiracao()
     corrida.save()
 
 
 def buscar_ecotaxi_proximo(lat, lon, assentos_necessarios=1):
     ecotaxis = Dispositivo.objects.filter(
-        tipo='ecotaxi',
-        status='aguardando',
-        assentos_disponiveis__gte=assentos_necessarios
+        tipo="ecotaxi",
+        status="aguardando",
+        assentos_disponiveis__gte=assentos_necessarios,
     )
     if not ecotaxis.exists():
         return None
@@ -71,7 +72,7 @@ class CriarCorridaView(generics.CreateAPIView):
         eco_taxi = buscar_ecotaxi_proximo(
             corrida.latitude_destino,
             corrida.longitude_destino,
-            corrida.assentos_necessarios
+            corrida.assentos_necessarios,
         )
 
         if eco_taxi:
@@ -88,7 +89,7 @@ class CorridaDetailView(generics.RetrieveAPIView):
 
     def get_object(self):
         corrida = super().get_object()
-        if corrida.status == 'pending' and timezone.now() > corrida.expiracao:
+        if corrida.status == "pending" and timezone.now() > corrida.expiracao:
             repassar_para_proximo_ecotaxi(corrida)
         return corrida
 
@@ -100,26 +101,30 @@ class AtualizarStatusCorridaView(APIView):
         corrida = get_object_or_404(SolicitacaoCorrida, pk=pk)
         novo_status = request.data.get("status")
 
-        status_validos = ['accepted', 'started', 'rejected', 'cancelled', 'completed']
+        status_validos = ["accepted", "started", "rejected", "cancelled", "completed"]
         if novo_status not in status_validos:
-            return Response({"erro": "Status inválido."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"erro": "Status inválido."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-        if novo_status == 'rejected':
+        if novo_status == "rejected":
             corrida.eco_taxi = None
-            corrida.status = 'pending'
+            corrida.status = "pending"
             corrida.expiracao = default_expiracao()
             corrida.save()
             repassar_para_proximo_ecotaxi(corrida)
             return Response({"mensagem": "Corrida foi repassada ao próximo EcoTaxi."})
 
-        if novo_status == 'cancelled' and corrida.status != 'completed':
-            corrida.status = 'cancelled'
+        if novo_status == "cancelled" and corrida.status != "completed":
+            corrida.status = "cancelled"
             corrida.save()
             return Response({"mensagem": "Corrida cancelada."})
 
         corrida.status = novo_status
         corrida.save()
-        return Response({"mensagem": f"Status da corrida atualizado para '{novo_status}'"})
+        return Response(
+            {"mensagem": f"Status da corrida atualizado para '{novo_status}'"}
+        )
 
 
 class CorridasDoPassageiroView(ListAPIView):
@@ -127,8 +132,8 @@ class CorridasDoPassageiroView(ListAPIView):
 
     def get_queryset(self):
         return SolicitacaoCorrida.objects.filter(
-            passageiro_id=self.kwargs['passageiro_id']
-        ).order_by('-criada_em')
+            passageiro_id=self.kwargs["passageiro_id"]
+        ).order_by("-criada_em")
 
 
 class CorridasParaEcoTaxiView(ListAPIView):
@@ -136,10 +141,10 @@ class CorridasParaEcoTaxiView(ListAPIView):
 
     def get_queryset(self):
         return SolicitacaoCorrida.objects.filter(
-            eco_taxi_id=self.kwargs['pk'],
-            status='pending',
-            expiracao__gte=timezone.now()
-        ).order_by('expiracao')
+            eco_taxi_id=self.kwargs["pk"],
+            status="pending",
+            expiracao__gte=timezone.now(),
+        ).order_by("expiracao")
 
 
 class CorridasEcoTaxiHistoricoView(ListAPIView):
@@ -147,21 +152,23 @@ class CorridasEcoTaxiHistoricoView(ListAPIView):
 
     def get_queryset(self):
         return SolicitacaoCorrida.objects.filter(
-            eco_taxi_id=self.kwargs['pk'],
-            status__in=['accepted', 'completed']
-        ).order_by('-criada_em')
+            eco_taxi_id=self.kwargs["pk"], status__in=["accepted", "completed"]
+        ).order_by("-criada_em")
 
 
 class CorridaAtivaPassageiroView(APIView):
     def get(self, request, passageiro_id):
-        corrida = SolicitacaoCorrida.objects.filter(
-            passageiro_id=passageiro_id,
-            status__in=['pending', 'accepted']
-        ).order_by('-criada_em').first()
+        corrida = (
+            SolicitacaoCorrida.objects.filter(
+                passageiro_id=passageiro_id, status__in=["pending", "accepted"]
+            )
+            .order_by("-criada_em")
+            .first()
+        )
 
         if corrida:
             return Response(SolicitacaoCorridaDetailSerializer(corrida).data)
-        return Response({'corrida': None})
+        return Response({"corrida": None})
 
 
 class DispositivoCreateView(generics.CreateAPIView):
@@ -170,40 +177,41 @@ class DispositivoCreateView(generics.CreateAPIView):
 
 
 class AtualizarNomeDispositivoView(APIView):
-    def patch(self, request, pk):
+    def patch(self, request, uuid):
         nome = request.data.get("nome")
         if not nome:
             return Response({"erro": "Nome não fornecido."}, status=400)
 
-        dispositivo = get_object_or_404(Dispositivo, pk=pk)
+        dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
         dispositivo.nome = nome
         dispositivo.save()
         return Response({"mensagem": "Nome atualizado com sucesso."})
 
 
 class AtualizarTipoDispositivoView(APIView):
-    def patch(self, request, pk):
+    def patch(self, request, uuid):
         tipo = request.data.get("tipo")
-        if tipo not in ['passageiro', 'ecotaxi']:
+        if tipo not in ["passageiro", "ecotaxi"]:
             return Response({"erro": "Tipo inválido"}, status=400)
 
-        dispositivo = get_object_or_404(Dispositivo, pk=pk)
+        dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
         dispositivo.tipo = tipo
         dispositivo.save()
         return Response({"mensagem": "Tipo de conta atualizado com sucesso."})
 
 
-class DispositivoDetailView(RetrieveAPIView):
+class DispositivoDetailView(generics.RetrieveAPIView):
     queryset = Dispositivo.objects.all()
     serializer_class = DispositivoSerializer
+    lookup_field = "uuid"
 
 
 class TipoDispositivoView(APIView):
     def get(self, request, uuid):
         dispositivo = Dispositivo.objects.filter(uuid=uuid).first()
         if not dispositivo:
-            return Response({'tipo': None, 'id': None})
-        return Response({'tipo': dispositivo.tipo, 'id': dispositivo.id})
+            return Response({"tipo": None, "id": None})
+        return Response({"tipo": dispositivo.tipo, "id": dispositivo.id})
 
 
 class DeletarDispositivoPorUUIDView(APIView):
@@ -213,3 +221,9 @@ class DeletarDispositivoPorUUIDView(APIView):
             return Response({"erro": "Dispositivo não encontrado."}, status=404)
         dispositivo.delete()
         return Response({"mensagem": "Dispositivo deletado com sucesso."})
+
+
+class DispositivoViewSet(ModelViewSet):
+    queryset = Dispositivo.objects.all()
+    serializer_class = DispositivoSerializer
+    lookup_field = "uuid"

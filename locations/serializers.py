@@ -4,6 +4,7 @@ from django.utils import timezone
 
 
 class DispositivoSerializer(serializers.ModelSerializer):
+    uuid = serializers.UUIDField()   # não read‑only
     class Meta:
         model = Dispositivo
         fields = '__all__'

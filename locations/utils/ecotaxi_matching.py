@@ -1,11 +1,10 @@
 # locations/utils/ecotaxi_matching.py
-# ================================================================
-#  VERSÃO “geopy-only”
-#  ---------------------------------------------------------------
-#  • Remove TODO código/dep. GIS (Distance, Point, GDAL, PostGIS)
-#  • Calcula distância em Python usando geopy.geodesic
-#  • Mantém transações e bloqueio pessimista (select_for_update)
-# ================================================================
+# ===============================================================
+#  VERSÃO 100 % UUID (Dispositivo usa uuid como PK)
+# ---------------------------------------------------------------
+# • Remove TODAS as menções a id.
+# • Filtros, exclusões e buscas usam uuid.
+# ===============================================================
 import logging
 from datetime import timedelta
 from typing import Optional
@@ -13,26 +12,17 @@ from typing import Optional
 from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
-from geopy.distance import geodesic          # ← cálculo de distância em Python
+from geopy.distance import geodesic
 
 from locations.models import Dispositivo, SolicitacaoCorrida
 
 
-# ------------------------------------------------------------------
-# FUNÇÃO PRINCIPAL: escolher o EcoTaxi mais próximo
-# ------------------------------------------------------------------
 def escolher_ecotaxi(
     latitude: float,
     longitude: float,
     assentos_necessarios: int = 1,
-    excluir_id: int | None = None,
+    excluir_uuid: str | None = None,   # 👈 agora é uuid
 ) -> Optional[Dispositivo]:
-    """
-    • Procura EcoTaxis em status 'aguardando', com assentos suficientes.
-    • Ordena TODOS pela distância (geopy.geodesic) em memória.
-    • Bloqueia a linha do EcoTaxi escolhido (select_for_update) para
-      evitar corrida – e já reserva os assentos.
-    """
     filtros = Q(
         tipo="ecotaxi",
         status="aguardando",
@@ -40,32 +30,29 @@ def escolher_ecotaxi(
         latitude__isnull=False,
         longitude__isnull=False,
     )
-    if excluir_id:
-        filtros &= ~Q(id=excluir_id)
+    if excluir_uuid:
+        filtros &= ~Q(uuid=excluir_uuid)       # 👈 usa uuid aqui
 
     with transaction.atomic():
-        # 🔒 bloqueia *somente* na hora que realmente vamos alterar
         candidatos = list(
             Dispositivo.objects
             .select_for_update(skip_locked=True)
             .filter(filtros)
-            .values("id", "latitude", "longitude", "assentos_disponiveis")
+            .values("uuid", "latitude", "longitude", "assentos_disponiveis")  # 👈 uuid
         )
 
         if not candidatos:
             return None
 
-        # ▶️  Ordena em memória pela menor distância
         candidatos.sort(
             key=lambda c: geodesic(
                 (latitude, longitude),
                 (c["latitude"], c["longitude"]),
             ).meters
         )
-        ecotaxi_id = candidatos[0]["id"]
+        ecotaxi_uuid = candidatos[0]["uuid"]   # 👈 pega uuid
 
-        # 🔄 Busca a instância bloqueada para atualizar
-        ecotaxi = Dispositivo.objects.select_for_update().get(id=ecotaxi_id)
+        ecotaxi = Dispositivo.objects.select_for_update().get(uuid=ecotaxi_uuid)
         ecotaxi.assentos_disponiveis = F("assentos_disponiveis") - assentos_necessarios
         ecotaxi.status = "aguardando_resposta"
         ecotaxi.save(update_fields=["assentos_disponiveis", "status"])
@@ -73,23 +60,15 @@ def escolher_ecotaxi(
         return ecotaxi
 
 
-# ------------------------------------------------------------------
-# REPASSE AUTOMÁTICO (expirou ou motorista rejeitou)
-# ------------------------------------------------------------------
 def repassar_para_proximo_ecotaxi(corrida: SolicitacaoCorrida) -> None:
-    """
-    • Tenta encontrar um novo motorista.
-    • Se não houver → status = expired.
-    • Se encontrar   → atribui, reinicia expiração, reserva assentos.
-    """
     if corrida.status not in {"pending", "expired"}:
-        return  # já aceita ou concluída
+        return
 
     novo_ecotaxi = escolher_ecotaxi(
         corrida.latitude_destino,
         corrida.longitude_destino,
         corrida.assentos_necessarios,
-        excluir_id=corrida.eco_taxi_id,
+        excluir_uuid=corrida.eco_taxi_id,      # 👈 já vem uuid
     )
 
     if not novo_ecotaxi:
@@ -105,5 +84,5 @@ def repassar_para_proximo_ecotaxi(corrida: SolicitacaoCorrida) -> None:
     logging.info(
         "🔄 Corrida %s repassada para EcoTaxi %s",
         corrida.id,
-        novo_ecotaxi.id,
+        novo_ecotaxi.uuid,
     )

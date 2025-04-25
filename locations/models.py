@@ -17,6 +17,7 @@ class Dispositivo(models.Model):
     uuid = models.UUIDField(primary_key=True, editable=True)   # ← chave única real
     nome = models.CharField(max_length=100)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    cor_ecotaxi = models.CharField(max_length=50, null=True, blank=True)
 
     status = models.CharField(
         max_length=20,

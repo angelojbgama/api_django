@@ -268,3 +268,18 @@ class CorridasPorUUIDView(ListAPIView):
         return SolicitacaoCorrida.objects.filter(
             eco_taxi=dispositivo, status__in=["accepted", "completed"]
         ).order_by("-criada_em")
+
+
+class AtualizarCorEcoTaxiView(APIView):
+    def patch(self, request, uuid):
+        cor = request.data.get("cor_ecotaxi")
+        if not cor:
+            return Response({"erro": "Cor não fornecida."}, status=400)
+
+        dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
+        if dispositivo.tipo != "ecotaxi":
+            return Response({"erro": "Apenas ecotaxis podem ter cor."}, status=400)
+
+        dispositivo.cor_ecotaxi = cor
+        dispositivo.save()
+        return Response({"mensagem": "Cor do EcoTaxi atualizada."})

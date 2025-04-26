@@ -16,6 +16,7 @@ from .views import (
     TipoDispositivoView,
     DeletarDispositivoPorUUIDView,
     AtualizarCorEcoTaxiView,
+    AtualizarAssentosEcoTaxiView,
 )
 
 urlpatterns = [
@@ -83,5 +84,10 @@ urlpatterns = [
         "corrida/uuid/<uuid:uuid>/",
         CorridasPorUUIDView.as_view(),
         name="corridas_por_uuid",
+    ),
+    path(
+        "dispositivo/<uuid:uuid>/atualizar_assentos_ecotaxi/",
+        AtualizarAssentosEcoTaxiView.as_view(),
+        name="atualizar_assentos_ecotaxi",
     ),
 ]

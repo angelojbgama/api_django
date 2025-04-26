@@ -283,3 +283,32 @@ class AtualizarCorEcoTaxiView(APIView):
         dispositivo.cor_ecotaxi = cor
         dispositivo.save()
         return Response({"mensagem": "Cor do EcoTaxi atualizada."})
+
+
+class AtualizarAssentosEcoTaxiView(APIView):
+    def patch(self, request, uuid):
+        assentos = request.data.get("assentos_disponiveis")
+        if assentos is None:
+            return Response(
+                {"erro": "Quantidade de assentos não fornecida."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            assentos = int(assentos)
+        except ValueError:
+            return Response(
+                {"erro": "Quantidade de assentos inválida."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
+        if dispositivo.tipo != "ecotaxi":
+            return Response(
+                {"erro": "Apenas ecotaxis podem ter assentos."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        dispositivo.assentos_disponiveis = assentos
+        dispositivo.save(update_fields=["assentos_disponiveis"])
+        return Response(
+            {"mensagem": "Assentos atualizados com sucesso!"},
+            status=status.HTTP_200_OK
+        )

@@ -407,7 +407,7 @@ class CorridasEcoTaxiView(APIView):
     """
     Retorna todas as informações de corridas para um ecotaxista:
     - corrida_ativa: corrida em andamento (accepted ou started)
-    - corridas_pendentes: corridas disponíveis para aceitar
+    - corridas_pendentes: corridas atribuídas a este ecotaxista
     - historico: últimas corridas concluídas
     """
     def get(self, request, uuid):
@@ -425,11 +425,11 @@ class CorridasEcoTaxiView(APIView):
                 status__in=["accepted", "started"]
             ).order_by('-criada_em').first()
 
-            # Corridas pendentes (disponíveis para aceitar)
+            # Corridas pendentes (atribuídas a este ecotaxi)
             corridas_pendentes = SolicitacaoCorrida.objects.filter(
+                eco_taxi=dispositivo,
                 status="pending",
-                expiracao__gte=timezone.now(),
-                eco_taxi__isnull=True
+                expiracao__gte=timezone.now()
             ).order_by('expiracao')
 
             # Histórico de corridas concluídas

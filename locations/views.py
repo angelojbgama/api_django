@@ -319,22 +319,31 @@ class AtualizarAssentosEcoTaxiView(APIView):
 
 
 class CorridasDisponiveisParaEcoTaxiView(APIView):
-    """
-    GET /api/corrida/disponiveis/ecotaxi/<int:ecotaxi_id>/
-    Retorna todas as corridas PENDING, não atribuídas e que cabem nos assentos do ecotaxi.
-    """
-    def get(self, request, ecotaxi_id):
-        ecotaxi = get_object_or_404(Dispositivo, pk=ecotaxi_id, tipo='ecotaxi')
+    def get(self, request, uuid):
+        try:
+            dispositivo = Dispositivo.objects.get(uuid=uuid)
+            if dispositivo.tipo != 'ecotaxi':
+                return Response(
+                    {"erro": "Dispositivo não é um EcoTaxi."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        qs = SolicitacaoCorrida.objects.filter(
-            eco_taxi__isnull=True,               # ainda não atribuída
-            status='pending',
-            expiracao__gte=timezone.now(),
-            assentos_necessarios__lte=ecotaxi.assentos_disponiveis
-        ).order_by('expiracao')
+            corridas = SolicitacaoCorrida.objects.filter(
+                status="pending",
+                expiracao__gte=timezone.now()
+            ).exclude(
+                eco_taxi=dispositivo
+            ).order_by('expiracao')
 
-        data = CorridaEcoTaxiListSerializer(qs, many=True).data
-        return Response(data)
+            return Response(
+                CorridaEcoTaxiListSerializer(corridas, many=True).data
+            )
+        except Dispositivo.DoesNotExist:
+            return Response(
+                {"erro": "Dispositivo não encontrado."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
 class AceitarCorridaView(APIView):
     """
     POST /api/corrida/<int:pk>/accept/
@@ -368,22 +377,29 @@ class AceitarCorridaView(APIView):
             corrida.save(update_fields=['eco_taxi', 'status'])
 
         return Response({"mensagem": "Corrida aceita."})
+
 class CorridaAtivaEcoTaxiView(APIView):
-    """
-    GET /api/corrida/ativa/ecotaxi/<int:ecotaxi_id>/
-    Retorna a última corrida em status accepted ou started.
-    """
-    def get(self, request, ecotaxi_id):
-        corrida = (
-            SolicitacaoCorrida.objects
-            .filter(
-                eco_taxi_id=ecotaxi_id,
-                status__in=['accepted', 'started']
+    def get(self, request, uuid):
+        try:
+            dispositivo = Dispositivo.objects.get(uuid=uuid)
+            if dispositivo.tipo != 'ecotaxi':
+                return Response(
+                    {"erro": "Dispositivo não é um EcoTaxi."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            corrida = SolicitacaoCorrida.objects.filter(
+                eco_taxi=dispositivo,
+                status__in=["accepted", "started"]
+            ).order_by('-criada_em').first()
+
+            if corrida:
+                return Response({
+                    "corrida": SolicitacaoCorridaDetailSerializer(corrida).data
+                })
+            return Response({"corrida": None})
+        except Dispositivo.DoesNotExist:
+            return Response(
+                {"erro": "Dispositivo não encontrado."},
+                status=status.HTTP_404_NOT_FOUND
             )
-            .order_by('-criada_em')
-            .first()
-        )
-        if corrida:
-            data = SolicitacaoCorridaDetailSerializer(corrida).data
-            return Response({"corrida": data})
-        return Response({"corrida": None})

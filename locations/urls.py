@@ -94,7 +94,7 @@ urlpatterns = [
         name="atualizar_assentos_ecotaxi",
     ),
     path(
-    "corrida/disponiveis/ecotaxi/<int:ecotaxi_id>/",
+    "corrida/disponiveis/ecotaxi/<uuid:uuid>/",
     CorridasDisponiveisParaEcoTaxiView.as_view(),
     name="corridas_disponiveis_ecotaxi",
     ),
@@ -104,7 +104,7 @@ urlpatterns = [
     name="aceitar_corrida"
     ),
     path(
-    "corrida/ativa/ecotaxi/<int:ecotaxi_id>/",
+    "corrida/ativa/ecotaxi/<uuid:uuid>/",
     CorridaAtivaEcoTaxiView.as_view(),
     name="corrida_ativa_ecotaxi"
 ),

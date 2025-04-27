@@ -17,6 +17,9 @@ from .views import (
     DeletarDispositivoPorUUIDView,
     AtualizarCorEcoTaxiView,
     AtualizarAssentosEcoTaxiView,
+    CorridasDisponiveisParaEcoTaxiView,
+    AceitarCorridaView,
+    CorridaAtivaEcoTaxiView,
 )
 
 urlpatterns = [
@@ -90,4 +93,20 @@ urlpatterns = [
         AtualizarAssentosEcoTaxiView.as_view(),
         name="atualizar_assentos_ecotaxi",
     ),
+    path(
+    "corrida/disponiveis/ecotaxi/<int:ecotaxi_id>/",
+    CorridasDisponiveisParaEcoTaxiView.as_view(),
+    name="corridas_disponiveis_ecotaxi",
+    ),
+    path(
+    "corrida/<int:pk>/accept/",
+    AceitarCorridaView.as_view(),
+    name="aceitar_corrida"
+    ),
+    path(
+    "corrida/ativa/ecotaxi/<int:ecotaxi_id>/",
+    CorridaAtivaEcoTaxiView.as_view(),
+    name="corrida_ativa_ecotaxi"
+),
+
 ]

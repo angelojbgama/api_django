@@ -41,10 +41,6 @@ class CriarCorridaView(generics.CreateAPIView):
                 corrida.assentos_necessarios,
             )
 
-            if eco_taxi:
-                corrida.eco_taxi = eco_taxi
-                corrida.save(update_fields=["eco_taxi"])
-
         return Response(
             SolicitacaoCorridaDetailSerializer(corrida).data,
             status=status.HTTP_201_CREATED,
@@ -320,3 +316,74 @@ class AtualizarAssentosEcoTaxiView(APIView):
             {"mensagem": "Assentos atualizados com sucesso!"},
             status=status.HTTP_200_OK
         )
+
+
+class CorridasDisponiveisParaEcoTaxiView(APIView):
+    """
+    GET /api/corrida/disponiveis/ecotaxi/<int:ecotaxi_id>/
+    Retorna todas as corridas PENDING, não atribuídas e que cabem nos assentos do ecotaxi.
+    """
+    def get(self, request, ecotaxi_id):
+        ecotaxi = get_object_or_404(Dispositivo, pk=ecotaxi_id, tipo='ecotaxi')
+
+        qs = SolicitacaoCorrida.objects.filter(
+            eco_taxi__isnull=True,               # ainda não atribuída
+            status='pending',
+            expiracao__gte=timezone.now(),
+            assentos_necessarios__lte=ecotaxi.assentos_disponiveis
+        ).order_by('expiracao')
+
+        data = CorridaEcoTaxiListSerializer(qs, many=True).data
+        return Response(data)
+class AceitarCorridaView(APIView):
+    """
+    POST /api/corrida/<int:pk>/accept/
+    Corpo: { "eco_taxi_id": <int> }
+    Só aceita se ainda for pending e assentos disponíveis.
+    """
+    def post(self, request, pk):
+        corrida = get_object_or_404(
+            SolicitacaoCorrida,
+            pk=pk,
+            status='pending',
+            eco_taxi__isnull=True
+        )
+        ecotaxi_id = request.data.get("eco_taxi_id")
+        ecotaxi = get_object_or_404(Dispositivo, pk=ecotaxi_id, tipo='ecotaxi')
+
+        if ecotaxi.assentos_disponiveis < corrida.assentos_necessarios:
+            return Response(
+                {"erro": "Assentos insuficientes."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            # decrementa assentos
+            ecotaxi.assentos_disponiveis = F('assentos_disponiveis') - corrida.assentos_necessarios
+            ecotaxi.status = 'aguardando_resposta'  # ou 'transito' se preferir
+            ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
+
+            corrida.eco_taxi = ecotaxi
+            corrida.status = 'accepted'
+            corrida.save(update_fields=['eco_taxi', 'status'])
+
+        return Response({"mensagem": "Corrida aceita."})
+class CorridaAtivaEcoTaxiView(APIView):
+    """
+    GET /api/corrida/ativa/ecotaxi/<int:ecotaxi_id>/
+    Retorna a última corrida em status accepted ou started.
+    """
+    def get(self, request, ecotaxi_id):
+        corrida = (
+            SolicitacaoCorrida.objects
+            .filter(
+                eco_taxi_id=ecotaxi_id,
+                status__in=['accepted', 'started']
+            )
+            .order_by('-criada_em')
+            .first()
+        )
+        if corrida:
+            data = SolicitacaoCorridaDetailSerializer(corrida).data
+            return Response({"corrida": data})
+        return Response({"corrida": None})

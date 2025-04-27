@@ -35,11 +35,17 @@ class CriarCorridaView(generics.CreateAPIView):
             serializer.is_valid(raise_exception=True)
             corrida = serializer.save()  # Salva pendente, sem eco_taxi ainda.
 
+            # Escolhe o ecotaxi mais próximo do ponto de partida
             eco_taxi = escolher_ecotaxi(
-                corrida.latitude_destino,
-                corrida.longitude_destino,
+                corrida.latitude_partida,  # Usa latitude_partida em vez de destino
+                corrida.longitude_partida,
                 corrida.assentos_necessarios,
             )
+
+            if eco_taxi:
+                corrida.eco_taxi = eco_taxi
+                corrida.expiracao = timezone.now() + timedelta(minutes=3)  # 3 minutos
+                corrida.save(update_fields=['eco_taxi', 'expiracao'])
 
         return Response(
             SolicitacaoCorridaDetailSerializer(corrida).data,
@@ -68,8 +74,8 @@ class CorridaDetailView(generics.RetrieveAPIView):
 class AtualizarStatusCorridaView(APIView):
     permission_classes = [AllowAny]
 
-    def patch(self, request, pk):
-        corrida = get_object_or_404(SolicitacaoCorrida, pk=pk)
+    def patch(self, request, uuid):
+        corrida = get_object_or_404(SolicitacaoCorrida, uuid=uuid)
         novo_status = request.data.get("status")
 
         status_validos = {
@@ -104,7 +110,7 @@ class AtualizarStatusCorridaView(APIView):
                 _liberar_assentos()
                 corrida.eco_taxi = None
                 corrida.status = "pending"
-                corrida.expiracao = timezone.now() + timedelta(minutes=5)
+                corrida.expiracao = timezone.now() + timedelta(minutes=3)  # 3 minutos
                 corrida.save(
                     update_fields=["eco_taxi", "status", "expiracao"]
                 )
@@ -407,7 +413,7 @@ class CorridasEcoTaxiView(APIView):
     """
     Retorna todas as informações de corridas para um ecotaxista:
     - corrida_ativa: corrida em andamento (accepted ou started)
-    - corridas_pendentes: corridas atribuídas a este ecotaxista
+    - corridas_pendentes: corridas atribuídas a este ecotaxi
     - historico: últimas corridas concluídas
     """
     def get(self, request, uuid):

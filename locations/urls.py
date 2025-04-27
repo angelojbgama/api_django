@@ -28,7 +28,7 @@ urlpatterns = [
     path("corrida/nova/", CriarCorridaView.as_view(), name="nova_corrida"),
     path("corrida/<int:pk>/", CorridaDetailView.as_view(), name="detalhe_corrida"),
     path(
-        "corrida/<int:pk>/status/",
+        "corrida/<uuid:uuid>/status/",
         AtualizarStatusCorridaView.as_view(),
         name="atualizar_status_corrida",
     ),

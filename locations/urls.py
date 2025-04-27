@@ -20,6 +20,7 @@ from .views import (
     CorridasDisponiveisParaEcoTaxiView,
     AceitarCorridaView,
     CorridaAtivaEcoTaxiView,
+    CorridasEcoTaxiView,
 )
 
 urlpatterns = [
@@ -108,5 +109,9 @@ urlpatterns = [
     CorridaAtivaEcoTaxiView.as_view(),
     name="corrida_ativa_ecotaxi"
 ),
-
+path(
+    "corrida/ecotaxi/<uuid:uuid>/",
+    CorridasEcoTaxiView.as_view(),
+    name="corridas_ecotaxi"
+),
 ]

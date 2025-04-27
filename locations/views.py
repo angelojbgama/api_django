@@ -330,9 +330,8 @@ class CorridasDisponiveisParaEcoTaxiView(APIView):
 
             corridas = SolicitacaoCorrida.objects.filter(
                 status="pending",
-                expiracao__gte=timezone.now()
-            ).exclude(
-                eco_taxi=dispositivo
+                expiracao__gte=timezone.now(),
+                eco_taxi__isnull=True  # Corridas que ainda não têm eco_taxi atribuído
             ).order_by('expiracao')
 
             return Response(
@@ -398,6 +397,59 @@ class CorridaAtivaEcoTaxiView(APIView):
                     "corrida": SolicitacaoCorridaDetailSerializer(corrida).data
                 })
             return Response({"corrida": None})
+        except Dispositivo.DoesNotExist:
+            return Response(
+                {"erro": "Dispositivo não encontrado."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+class CorridasEcoTaxiView(APIView):
+    """
+    Retorna todas as informações de corridas para um ecotaxista:
+    - corrida_ativa: corrida em andamento (accepted ou started)
+    - corridas_pendentes: corridas disponíveis para aceitar
+    - historico: últimas corridas concluídas
+    """
+    def get(self, request, uuid):
+        try:
+            dispositivo = Dispositivo.objects.get(uuid=uuid)
+            if dispositivo.tipo != 'ecotaxi':
+                return Response(
+                    {"erro": "Dispositivo não é um EcoTaxi."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Corrida ativa (em andamento)
+            corrida_ativa = SolicitacaoCorrida.objects.filter(
+                eco_taxi=dispositivo,
+                status__in=["accepted", "started"]
+            ).order_by('-criada_em').first()
+
+            # Corridas pendentes (disponíveis para aceitar)
+            corridas_pendentes = SolicitacaoCorrida.objects.filter(
+                status="pending",
+                expiracao__gte=timezone.now(),
+                eco_taxi__isnull=True
+            ).order_by('expiracao')
+
+            # Histórico de corridas concluídas
+            historico = SolicitacaoCorrida.objects.filter(
+                eco_taxi=dispositivo,
+                status__in=["completed", "cancelled"]
+            ).order_by('-criada_em')[:10]  # Últimas 10 corridas
+
+            return Response({
+                "corrida_ativa": SolicitacaoCorridaDetailSerializer(corrida_ativa).data if corrida_ativa else None,
+                "corridas_pendentes": CorridaEcoTaxiListSerializer(corridas_pendentes, many=True).data,
+                "historico": CorridaEcoTaxiListSerializer(historico, many=True).data,
+                "info_ecotaxi": {
+                    "nome": dispositivo.nome,
+                    "status": dispositivo.status,
+                    "assentos_disponiveis": dispositivo.assentos_disponiveis,
+                    "cor_ecotaxi": dispositivo.cor_ecotaxi,
+                }
+            })
+
         except Dispositivo.DoesNotExist:
             return Response(
                 {"erro": "Dispositivo não encontrado."},

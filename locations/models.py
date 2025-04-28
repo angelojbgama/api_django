@@ -50,7 +50,9 @@ class SolicitacaoCorrida(models.Model):
         ("completed", "Concluída"),
         ("expired", "Expirada"),
     ]
-
+    
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)  
+    
     passageiro = models.ForeignKey(
         Dispositivo,
         on_delete=models.CASCADE,

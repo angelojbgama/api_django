@@ -48,6 +48,7 @@ class CorridaEcoTaxiListSerializer(serializers.ModelSerializer):
         model = SolicitacaoCorrida
         fields = [
             'id',
+            'uuid',
             'endereco_partida',
             'endereco_destino',
             'latitude_partida',

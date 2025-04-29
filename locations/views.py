@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from django.db import transaction
+from django.db import transaction,IntegrityError
 from django.db.models import F
 from django.utils import timezone
 from rest_framework import generics, status
@@ -26,32 +26,48 @@ from locations.utils.ecotaxi_matching import escolher_ecotaxi, repassar_para_pro
 # 1) CRIAR CORRIDA – atribui EcoTaxi + reserva assentos de forma
 #    transacional para evitar race-condition.
 # ------------------------------------------------------------------
-class CriarCorridaView(generics.CreateAPIView):
+class CriarCorridaView(CreateAPIView):
+    """
+    POST /api/corrida/nova/
+    Cria uma nova solicitação de corrida, faz o matching de ecotaxi,
+    decrementa assentos e retorna JSON ou captura IntegrityError em JSON.
+    """
     serializer_class = SolicitacaoCorridaCreateSerializer
 
     def create(self, request, *args, **kwargs):
-        with transaction.atomic():
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            corrida = serializer.save()
+        try:
+            with transaction.atomic():
+                # Validação dos dados de entrada
+                serializer = self.get_serializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                corrida = serializer.save()
 
-            ecotaxi = escolher_ecotaxi(
-                corrida.latitude_partida,
-                corrida.longitude_partida,
-                corrida.assentos_necessarios
+                # Escolhe ecotaxi disponível
+                ecotaxi = escolher_ecotaxi(
+                    corrida.latitude_partida,
+                    corrida.longitude_partida,
+                    corrida.assentos_necessarios
+                )
+                if ecotaxi:
+                    # Lock e decremento de assentos
+                    ecotaxi = Dispositivo.objects.select_for_update().get(pk=ecotaxi.pk)
+                    ecotaxi.assentos_disponiveis -= corrida.assentos_necessarios
+                    ecotaxi.status = 'aguardando'
+                    ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
+
+                    # Atribui ecotaxi e define expiração
+                    corrida.eco_taxi = ecotaxi
+                    corrida.expiracao = timezone.now() + timedelta(minutes=5)
+                    corrida.save(update_fields=['eco_taxi', 'expiracao'])
+
+        except IntegrityError as e:
+            # Retorna o erro de integridade em JSON para facilitar debug
+            return Response(
+                {"erro": "IntegrityError", "detalhes": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
             )
-            if ecotaxi:
-                # lock + decrement “na mão”
-                ecotaxi = Dispositivo.objects.select_for_update().get(pk=ecotaxi.pk)
-                ecotaxi.assentos_disponiveis -= corrida.assentos_necessarios
-                ecotaxi.status = 'aguardando'
-                ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
 
-                corrida.eco_taxi = ecotaxi
-                corrida.expiracao = timezone.now() + timedelta(minutes=5)
-                corrida.save(update_fields=['eco_taxi', 'expiracao'])
-
-        # serializa: agora tudo é int/UUID normais
+        # Serializa e retorna a corrida criada
         data = SolicitacaoCorridaDetailSerializer(corrida).data
         return Response(data, status=status.HTTP_201_CREATED)
 

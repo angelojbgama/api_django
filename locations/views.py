@@ -144,9 +144,9 @@ class AtualizarStatusCorridaView(APIView):
         # CANCELAR
         if novo_status == 'cancelled' and corrida.status != 'completed':
             with transaction.atomic():
-                _devolver_assentos()
-                corrida.status = 'cancelled'
-                corrida.save(update_fields=['status'])
+                corrida.eco_taxi = None
+                corrida.status    = 'cancelled'
+                corrida.save(update_fields=['eco_taxi','status'])
             return Response({'mensagem': 'Corrida cancelada.'})
 
         # COMPLETAR

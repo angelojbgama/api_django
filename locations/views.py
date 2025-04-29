@@ -35,22 +35,23 @@ class CriarCorridaView(generics.CreateAPIView):
             serializer.is_valid(raise_exception=True)
             corrida = serializer.save()
 
-            # lógica de escolha de ecotaxi
             ecotaxi = escolher_ecotaxi(
                 corrida.latitude_partida,
                 corrida.longitude_partida,
                 corrida.assentos_necessarios
             )
             if ecotaxi:
+                # lock + decrement “na mão”
                 ecotaxi = Dispositivo.objects.select_for_update().get(pk=ecotaxi.pk)
-                ecotaxi.assentos_disponiveis = F('assentos_disponiveis') - corrida.assentos_necessarios
-                ecotaxi.status              = 'aguardando'
+                ecotaxi.assentos_disponiveis -= corrida.assentos_necessarios
+                ecotaxi.status = 'aguardando'
                 ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
 
                 corrida.eco_taxi = ecotaxi
                 corrida.expiracao = timezone.now() + timedelta(minutes=5)
                 corrida.save(update_fields=['eco_taxi', 'expiracao'])
 
+        # serializa: agora tudo é int/UUID normais
         data = SolicitacaoCorridaDetailSerializer(corrida).data
         return Response(data, status=status.HTTP_201_CREATED)
 

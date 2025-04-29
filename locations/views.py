@@ -32,46 +32,57 @@ from locations.utils.ecotaxi_matching import escolher_ecotaxi, repassar_para_pro
 class CriarCorridaView(CreateAPIView):
     """
     POST /api/corrida/nova/
-    Cria uma nova solicitação de corrida, faz o matching de ecotaxi,
-    decrementa assentos (se houver) e retorna JSON.
+    Se não houver EcoTaxi disponível, retorna mensagem sugerindo tentar mais tarde.
+    Caso contrário, cria a solicitação, reserva assentos e retorna os dados.
     """
     serializer_class = SolicitacaoCorridaCreateSerializer
 
     def create(self, request, *args, **kwargs):
+        # 1) valida os dados (mas ainda não salva nada)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+
+        # 2) tenta achar um EcoTaxi compatível antes de criar a corrida
+        ecotaxi = escolher_ecotaxi(
+            validated['latitude_partida'],
+            validated['longitude_partida'],
+            validated['assentos_necessarios']
+        )
+        if ecotaxi is None:
+            return Response(
+                {"mensagem": "Nenhum EcoTaxi disponível no momento. Por favor, tente novamente mais tarde."},
+                status=status.HTTP_200_OK
+            )
+
+        # 3) create + reserva de assentos em transação
         try:
             with transaction.atomic():
-                # 1) valida e salva a solicitação
-                serializer = self.get_serializer(data=request.data)
-                serializer.is_valid(raise_exception=True)
+                # 3.1) salva a solicitação
                 corrida = serializer.save()
 
-                # 2) tenta escolher um ecotaxi com capacidade
-                ecotaxi = escolher_ecotaxi(
-                    corrida.latitude_partida,
-                    corrida.longitude_partida,
-                    corrida.assentos_necessarios
-                )
-                if ecotaxi:
-                    # 3) re-busca o objeto sob lock para evitar race-conditions
-                    ecotaxi = Dispositivo.objects.select_for_update().get(pk=ecotaxi.pk)
+                # 3.2) lock e decremento de assentos
+                taxi = Dispositivo.objects.select_for_update().get(pk=ecotaxi.pk)
+                if taxi.assentos_disponiveis < corrida.assentos_necessarios:
+                    # checagem extra por via das dúvidas
+                    raise IntegrityError("Assentos insuficientes no momento da reserva.")
 
-                    # 4) decrementa apenas se houver assentos suficientes
-                    if ecotaxi.assentos_disponiveis >= corrida.assentos_necessarios:
-                        ecotaxi.assentos_disponiveis -= corrida.assentos_necessarios
-                        ecotaxi.status = 'aguardando'
-                        ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
+                taxi.assentos_disponiveis -= corrida.assentos_necessarios
+                taxi.status = 'aguardando'
+                taxi.save(update_fields=['assentos_disponiveis', 'status'])
 
-                        # 5) vincula o ecotaxi e define expiração
-                        corrida.eco_taxi = ecotaxi
-                        corrida.expiracao = timezone.now() + timedelta(minutes=5)
-                        corrida.save(update_fields=['eco_taxi', 'expiracao'])
-                    # se não tiver, deixa pendente sem motorista
+                # 3.3) vincula e define expiração
+                corrida.eco_taxi = taxi
+                corrida.expiracao = timezone.now() + timedelta(minutes=5)
+                corrida.save(update_fields=['eco_taxi', 'expiracao'])
+
         except IntegrityError as e:
             return Response(
                 {"erro": "IntegrityError", "detalhes": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # 4) retorna os dados da corrida criada
         data = SolicitacaoCorridaDetailSerializer(corrida).data
         return Response(data, status=status.HTTP_201_CREATED)
 

@@ -40,16 +40,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'django_crontab',
     'api',
     'locations',
 
-]
-CRONJOBS = [
-    (
-        '*/1 * * * *',                # toda vez que o minuto mudar
-        'locations.management.commands.retry_match'  
-    ), 
 ]
 
 REST_FRAMEWORK = {

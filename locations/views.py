@@ -33,23 +33,28 @@ class CriarCorridaView(generics.CreateAPIView):
         with transaction.atomic():
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            corrida = serializer.save()  # Salva pendente, sem eco_taxi ainda.
+            corrida = serializer.save()
 
-            # Escolhe o ecotaxi mais próximo do ponto de partida
-            eco_taxi = escolher_ecotaxi(
-                corrida.latitude_partida,  # Usa latitude_partida em vez de destino
+            ecotaxi = escolher_ecotaxi(
+                corrida.latitude_partida,
                 corrida.longitude_partida,
                 corrida.assentos_necessarios,
             )
+            if ecotaxi:
+                # AQUI: bloqueia o registro do ecotaxi antes de decrementar assentos
+                ecotaxi = Dispositivo.objects.select_for_update().get(pk=ecotaxi.pk)
 
-            if eco_taxi:
-                corrida.eco_taxi = eco_taxi
-                corrida.expiracao = timezone.now() + timedelta(minutes=3)  # 3 minutos
+                ecotaxi.assentos_disponiveis = F('assentos_disponiveis') - corrida.assentos_necessarios
+                ecotaxi.status = 'aguardando_resposta'
+                ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
+
+                corrida.eco_taxi = ecotaxi
+                corrida.expiracao = timezone.now() + timedelta(minutes=5)
                 corrida.save(update_fields=['eco_taxi', 'expiracao'])
 
         return Response(
             SolicitacaoCorridaDetailSerializer(corrida).data,
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_201_CREATED
         )
 
 
@@ -72,82 +77,66 @@ class CorridaDetailView(generics.RetrieveAPIView):
 #    atualiza status do motorista, repassa se precisar.
 # ------------------------------------------------------------------
 class AtualizarStatusCorridaView(APIView):
+    """
+    PATCH /api/corrida/<uuid:uuid>/status/
+    - rejected: devolve assentos, desvincula ecotaxi, repassa para próximo.
+    - cancelled: devolve assentos e cancela definitivamente.
+    - completed: devolve assentos e finaliza.
+    - accepted/started: apenas atualiza status do ecotaxi e da corrida.
+    """
     permission_classes = [AllowAny]
 
     def patch(self, request, uuid):
         corrida = get_object_or_404(SolicitacaoCorrida, uuid=uuid)
-        novo_status = request.data.get("status")
+        novo_status = request.data.get('status')
 
-        status_validos = {
-            "accepted",
-            "started",
-            "rejected",
-            "cancelled",
-            "completed",
-        }
-        if novo_status not in status_validos:
-            return Response(
-                {"erro": "Status inválido."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        validos = {'accepted', 'started', 'rejected', 'cancelled', 'completed'}
+        if novo_status not in validos:
+            return Response({'erro': 'Status inválido.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ──────────────────────────────────────────────────────────
-        #  Função auxiliar: devolve assentos e libera motorista.
-        # ──────────────────────────────────────────────────────────
-        def _liberar_assentos():
-            if corrida.eco_taxi:
-                corrida.eco_taxi.assentos_disponiveis = (
-                    F("assentos_disponiveis") + corrida.assentos_necessarios
-                )
-                corrida.eco_taxi.status = "aguardando"
-                corrida.eco_taxi.save(
-                    update_fields=["assentos_disponiveis", "status"]
-                )
+        def _devolver_assentos():
+            ecotaxi = corrida.eco_taxi
+            if ecotaxi:
+                ecotaxi.assentos_disponiveis = F('assentos_disponiveis') + corrida.assentos_necessarios
+                ecotaxi.status = 'aguardando'
+                ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
 
-        # -------------------- REJECTED ---------------------------
-        if novo_status == "rejected":
+        # REJEITAR → devolver assentos, desvincular, voltar a pending, repassar
+        if novo_status == 'rejected':
             with transaction.atomic():
-                _liberar_assentos()
+                _devolver_assentos()
                 corrida.eco_taxi = None
-                corrida.status = "pending"
-                corrida.expiracao = timezone.now() + timedelta(minutes=3)  # 3 minutos
-                corrida.save(
-                    update_fields=["eco_taxi", "status", "expiracao"]
-                )
+                corrida.status = 'pending'
+                corrida.expiracao = timezone.now() + timedelta(minutes=5)
+                corrida.save(update_fields=['eco_taxi', 'status', 'expiracao'])
                 repassar_para_proximo_ecotaxi(corrida)
-            return Response(
-                {"mensagem": "Corrida repassada para outro EcoTaxi."}
-            )
+            return Response({'mensagem': 'Corrida recusada e repassada.'})
 
-        # -------------------- CANCELLED --------------------------
-        if novo_status == "cancelled" and corrida.status != "completed":
+        # CANCELAR → devolver assentos, cancelar
+        if novo_status == 'cancelled' and corrida.status != 'completed':
             with transaction.atomic():
-                _liberar_assentos()
-                corrida.status = "cancelled"
-                corrida.save(update_fields=["status"])
-            return Response({"mensagem": "Corrida cancelada."})
+                _devolver_assentos()
+                corrida.status = 'cancelled'
+                corrida.save(update_fields=['status'])
+            return Response({'mensagem': 'Corrida cancelada.'})
 
-        # -------------------- COMPLETED --------------------------
-        if novo_status == "completed":
+        # COMPLETAR → devolver assentos, concluir
+        if novo_status == 'completed':
             with transaction.atomic():
-                _liberar_assentos()
-                corrida.status = "completed"
-                corrida.save(update_fields=["status"])
-            return Response({"mensagem": "Corrida concluída."})
+                _devolver_assentos()
+                corrida.status = 'completed'
+                corrida.save(update_fields=['status'])
+            return Response({'mensagem': 'Corrida concluída.'})
 
-        # -------------------- ACCEPTED / STARTED -----------------
-        if novo_status == "accepted" and corrida.eco_taxi:
-            corrida.eco_taxi.status = "aguardando_resposta"
-            corrida.eco_taxi.save(update_fields=["status"])
-
-        if novo_status == "started" and corrida.eco_taxi:
-            corrida.eco_taxi.status = "transito"
-            corrida.eco_taxi.save(update_fields=["status"])
+        # ACCEPTED / STARTED → atualiza apenas status do ecotaxi e da corrida
+        if novo_status in {'accepted', 'started'} and corrida.eco_taxi:
+            corrida.eco_taxi.status = 'aguardando_resposta' if novo_status == 'accepted' else 'transito'
+            corrida.eco_taxi.save(update_fields=['status'])
 
         corrida.status = novo_status
-        corrida.save(update_fields=["status"])
-        return Response({"mensagem": f"Status → {novo_status}"})
-
+        corrida.save(update_fields=['status'])
+        detalhe = SolicitacaoCorridaDetailSerializer(corrida).data
+        return Response({'mensagem': f'Status → {novo_status}', 'corrida': detalhe})
 
 # ------------------------------------------------------------------
 # 4) LISTAGENS E OUTRAS VIEWS  (sem alterações na lógica)

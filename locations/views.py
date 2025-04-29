@@ -1,3 +1,5 @@
+# views.py
+
 from __future__ import annotations
 
 import uuid
@@ -25,44 +27,45 @@ from locations.utils.ecotaxi_matching import escolher_ecotaxi, repassar_para_pro
 
 
 # ------------------------------------------------------------------
-# 1) CRIAR CORRIDA – atribui EcoTaxi + reserva assentos de forma
-#    transacional para evitar race-condition.
+# 1) CRIAR CORRIDA
 # ------------------------------------------------------------------
 class CriarCorridaView(CreateAPIView):
     """
     POST /api/corrida/nova/
     Cria uma nova solicitação de corrida, faz o matching de ecotaxi,
-    decrementa assentos e retorna JSON ou captura IntegrityError em JSON.
+    decrementa assentos (se houver) e retorna JSON.
     """
     serializer_class = SolicitacaoCorridaCreateSerializer
 
     def create(self, request, *args, **kwargs):
         try:
             with transaction.atomic():
-                # 1) valida e salva a corrida no estado inicial
+                # 1) valida e salva a solicitação
                 serializer = self.get_serializer(data=request.data)
                 serializer.is_valid(raise_exception=True)
                 corrida = serializer.save()
 
-                # 2) escolhe um ecotaxi disponível
+                # 2) tenta escolher um ecotaxi com capacidade
                 ecotaxi = escolher_ecotaxi(
                     corrida.latitude_partida,
                     corrida.longitude_partida,
                     corrida.assentos_necessarios
                 )
                 if ecotaxi:
-                    # bloqueia o registro e decrementa assentos
+                    # 3) re-busca o objeto sob lock para evitar race-conditions
                     ecotaxi = Dispositivo.objects.select_for_update().get(pk=ecotaxi.pk)
-                    ecotaxi.assentos_disponiveis -= corrida.assentos_necessarios
-                    # usa status válido definido nos choices de Dispositivo
-                    ecotaxi.status = 'aguardando_resposta'
-                    ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
 
-                    # atribui o ecotaxi e define expiração da oferta
-                    corrida.eco_taxi = ecotaxi
-                    corrida.expiracao = timezone.now() + timedelta(minutes=5)
-                    corrida.save(update_fields=['eco_taxi', 'expiracao'])
+                    # 4) decrementa apenas se houver assentos suficientes
+                    if ecotaxi.assentos_disponiveis >= corrida.assentos_necessarios:
+                        ecotaxi.assentos_disponiveis -= corrida.assentos_necessarios
+                        ecotaxi.status = 'aguardando'
+                        ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
 
+                        # 5) vincula o ecotaxi e define expiração
+                        corrida.eco_taxi = ecotaxi
+                        corrida.expiracao = timezone.now() + timedelta(minutes=5)
+                        corrida.save(update_fields=['eco_taxi', 'expiracao'])
+                    # se não tiver, deixa pendente sem motorista
         except IntegrityError as e:
             return Response(
                 {"erro": "IntegrityError", "detalhes": str(e)},
@@ -74,7 +77,7 @@ class CriarCorridaView(CreateAPIView):
 
 
 # ------------------------------------------------------------------
-# 2) DETALHE DA CORRIDA – repassa se expirou.
+# 2) DETALHE DA CORRIDA
 # ------------------------------------------------------------------
 class CorridaDetailView(generics.RetrieveAPIView):
     queryset = SolicitacaoCorrida.objects.all()
@@ -82,21 +85,21 @@ class CorridaDetailView(generics.RetrieveAPIView):
 
     def get_object(self):
         corrida = super().get_object()
+        # repassa se expirou
         if corrida.status == "pending" and timezone.now() > corrida.expiracao:
             repassar_para_proximo_ecotaxi(corrida)
         return corrida
 
 
 # ------------------------------------------------------------------
-# 3) ATUALIZAR STATUS – devolve assentos em cancel/reject/complete,
-#    atualiza status do motorista, repassa se precisar.
+# 3) ATUALIZAR STATUS
 # ------------------------------------------------------------------
 class AtualizarStatusCorridaView(APIView):
     """
     PATCH /api/corrida/<uuid:uuid>/status/
-    - rejected: devolve assentos, desvincula ecotaxi, repassa para próximo.
-    - cancelled: devolve assentos e cancela definitivamente.
-    - completed: devolve assentos e finaliza.
+    - rejected: devolve assentos, desvincula ecotaxi, repassa.
+    - cancelled: devolve assentos e cancela.
+    - completed: devolve assentos e conclui.
     - accepted/started: atualiza status do ecotaxi e da corrida.
     """
     permission_classes = [AllowAny]
@@ -116,7 +119,7 @@ class AtualizarStatusCorridaView(APIView):
                 ecotaxi.status = 'aguardando'
                 ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
 
-        # REJEITAR → devolver assentos, desvincular, repassar
+        # REJEITAR
         if novo_status == 'rejected':
             with transaction.atomic():
                 _devolver_assentos()
@@ -127,7 +130,7 @@ class AtualizarStatusCorridaView(APIView):
                 repassar_para_proximo_ecotaxi(corrida)
             return Response({'mensagem': 'Corrida recusada e repassada.'})
 
-        # CANCELAR → devolver assentos, cancelar
+        # CANCELAR
         if novo_status == 'cancelled' and corrida.status != 'completed':
             with transaction.atomic():
                 _devolver_assentos()
@@ -135,7 +138,7 @@ class AtualizarStatusCorridaView(APIView):
                 corrida.save(update_fields=['status'])
             return Response({'mensagem': 'Corrida cancelada.'})
 
-        # COMPLETAR → devolver assentos, concluir
+        # COMPLETAR
         if novo_status == 'completed':
             with transaction.atomic():
                 _devolver_assentos()
@@ -143,7 +146,7 @@ class AtualizarStatusCorridaView(APIView):
                 corrida.save(update_fields=['status'])
             return Response({'mensagem': 'Corrida concluída.'})
 
-        # ACCEPTED / STARTED → atualiza status do ecotaxi e da corrida
+        # ACCEPTED / STARTED
         if novo_status in {'accepted', 'started'} and corrida.eco_taxi:
             corrida.eco_taxi.status = (
                 'aguardando_resposta' if novo_status == 'accepted' else 'transito'
@@ -190,11 +193,15 @@ class CorridasEcoTaxiHistoricoView(ListAPIView):
 
 
 class CorridaAtivaPassageiroView(APIView):
+    """
+    GET /api/corrida/passageiro/<id>/ativa/
+    Retorna a corrida ativa (pendente, aceita ou em trânsito).
+    """
     def get(self, request, passageiro_id):
         corrida = (
             SolicitacaoCorrida.objects.filter(
                 passageiro_id=passageiro_id,
-                status__in=["pending", "accepted"],
+                status__in=["pending", "accepted", "started"],
             )
             .order_by("-criada_em")
             .first()
@@ -217,7 +224,6 @@ class AtualizarNomeDispositivoView(APIView):
         nome = request.data.get("nome")
         if not nome:
             return Response({"erro": "Nome não fornecido."}, status=status.HTTP_400_BAD_REQUEST)
-
         dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
         dispositivo.nome = nome
         dispositivo.save()
@@ -229,7 +235,6 @@ class AtualizarTipoDispositivoView(APIView):
         tipo = request.data.get("tipo")
         if tipo not in ["passageiro", "ecotaxi"]:
             return Response({"erro": "Tipo inválido"}, status=status.HTTP_400_BAD_REQUEST)
-
         dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
         dispositivo.tipo = tipo
         dispositivo.save()
@@ -259,12 +264,10 @@ class CorridasPorUUIDView(ListAPIView):
 
     def get_queryset(self):
         dispositivo = get_object_or_404(Dispositivo, uuid=self.kwargs["uuid"])
-
         if dispositivo.tipo == "passageiro":
             return SolicitacaoCorrida.objects.filter(
                 passageiro=dispositivo
             ).order_by("-criada_em")
-
         return SolicitacaoCorrida.objects.filter(
             eco_taxi=dispositivo, status__in=["accepted", "completed"]
         ).order_by("-criada_em")
@@ -275,11 +278,9 @@ class AtualizarCorEcoTaxiView(APIView):
         cor = request.data.get("cor_ecotaxi")
         if not cor:
             return Response({"erro": "Cor não fornecida."}, status=status.HTTP_400_BAD_REQUEST)
-
         dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
         if dispositivo.tipo != "ecotaxi":
             return Response({"erro": "Apenas ecotaxis podem ter cor."}, status=status.HTTP_400_BAD_REQUEST)
-
         dispositivo.cor_ecotaxi = cor
         dispositivo.save()
         return Response({"mensagem": "Cor do EcoTaxi atualizada."})
@@ -293,19 +294,16 @@ class AtualizarAssentosEcoTaxiView(APIView):
     def patch(self, request, uuid):
         assentos = request.data.get("assentos_disponiveis")
         if assentos is None:
-            return Response(
-                {"erro": "Insira 'assentos_disponiveis' no corpo da requisição."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"erro": "Insira 'assentos_disponiveis' no corpo da requisição."},
+                            status=status.HTTP_400_BAD_REQUEST)
         try:
             assentos = int(assentos)
         except (ValueError, TypeError):
             return Response({"erro": "Valor de assentos inválido."}, status=status.HTTP_400_BAD_REQUEST)
-
         dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
         if dispositivo.tipo != "ecotaxi":
-            return Response({"erro": "Apenas dispositivos do tipo 'ecotaxi' podem ter assentos."}, status=status.HTTP_400_BAD_REQUEST)
-
+            return Response({"erro": "Apenas ecotaxis podem ter assentos."},
+                            status=status.HTTP_400_BAD_REQUEST)
         dispositivo.assentos_disponiveis = assentos
         dispositivo.save(update_fields=["assentos_disponiveis"])
         return Response({"mensagem": "Assentos atualizados com sucesso!"}, status=status.HTTP_200_OK)
@@ -316,13 +314,11 @@ class CorridasDisponiveisParaEcoTaxiView(APIView):
         dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
         if dispositivo.tipo != "ecotaxi":
             return Response({"erro": "Dispositivo não é um EcoTaxi."}, status=status.HTTP_400_BAD_REQUEST)
-
         corridas = SolicitacaoCorrida.objects.filter(
             status="pending",
             expiracao__gte=timezone.now(),
             eco_taxi__isnull=True
         ).order_by("expiracao")
-
         return Response(CorridaEcoTaxiListSerializer(corridas, many=True).data)
 
 
@@ -340,19 +336,15 @@ class AceitarCorridaView(APIView):
         )
         ecotaxi_id = request.data.get("eco_taxi_id")
         ecotaxi = get_object_or_404(Dispositivo, pk=ecotaxi_id, tipo="ecotaxi")
-
         if ecotaxi.assentos_disponiveis < corrida.assentos_necessarios:
             return Response({"erro": "Assentos insuficientes."}, status=status.HTTP_400_BAD_REQUEST)
-
         with transaction.atomic():
             ecotaxi.assentos_disponiveis = F("assentos_disponiveis") - corrida.assentos_necessarios
             ecotaxi.status = "aguardando_resposta"
             ecotaxi.save(update_fields=["assentos_disponiveis", "status"])
-
             corrida.eco_taxi = ecotaxi
             corrida.status = "accepted"
             corrida.save(update_fields=["eco_taxi", "status"])
-
         return Response({"mensagem": "Corrida aceita."})
 
 
@@ -361,12 +353,10 @@ class CorridaAtivaEcoTaxiView(APIView):
         dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
         if dispositivo.tipo != "ecotaxi":
             return Response({"erro": "Dispositivo não é um EcoTaxi."}, status=status.HTTP_400_BAD_REQUEST)
-
         corrida = SolicitacaoCorrida.objects.filter(
             eco_taxi=dispositivo,
             status__in=["accepted", "started"]
         ).order_by("-criada_em").first()
-
         if corrida:
             return Response({"corrida": SolicitacaoCorridaDetailSerializer(corrida).data})
         return Response({"corrida": None})
@@ -375,34 +365,39 @@ class CorridaAtivaEcoTaxiView(APIView):
 class CorridasView(APIView):
     """
     GET /api/corridas/<uuid:uuid>/
-    Retorna corridas para ecotaxi ou passageiro, excluindo always rejected/cancelled/expired.
+    Retorna corridas para ecotaxi ou passageiro, excluindo sempre rejected/cancelled/expired.
     """
-    EXCLUDED = ["rejected", "cancelled", "expired"]
-    ECO_ATIVA = ["accepted", "started"]
-    ECO_PEND = ["pending"]
-    ECO_HIST = ["completed"]
-    PASS_ATIVA = ["pending", "accepted", "in_transit"]
-    PASS_HIST = ["completed"]
+    EXCLUDED     = ["rejected", "cancelled", "expired"]
+    ECO_ATIVA    = ["accepted", "started"]
+    ECO_PEND     = ["pending"]
+    ECO_HIST     = ["completed"]
+    PASS_ATIVA   = ["pending", "accepted", "started"]   # agora inclui 'started'
+    PASS_HIST    = ["completed"]
 
     def get(self, request, uuid):
         dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
 
+        # EcoTaxi
         if dispositivo.tipo == "ecotaxi":
             ativa = (
-                SolicitacaoCorrida.objects.filter(
-                    eco_taxi=dispositivo, status__in=self.ECO_ATIVA
-                ).exclude(status__in=self.EXCLUDED).order_by("-criada_em").first()
+                SolicitacaoCorrida.objects
+                    .filter(eco_taxi=dispositivo, status__in=self.ECO_ATIVA)
+                    .exclude(status__in=self.EXCLUDED)
+                    .order_by("-criada_em")
+                    .first()
             )
             pend = (
-                SolicitacaoCorrida.objects.filter(
-                    eco_taxi=dispositivo, status__in=self.ECO_PEND,
-                    expiracao__gte=timezone.now()
-                ).exclude(status__in=self.EXCLUDED).order_by("expiracao")
+                SolicitacaoCorrida.objects
+                    .filter(eco_taxi=dispositivo, status__in=self.ECO_PEND,
+                            expiracao__gte=timezone.now())
+                    .exclude(status__in=self.EXCLUDED)
+                    .order_by("expiracao")
             )
             hist = (
-                SolicitacaoCorrida.objects.filter(
-                    eco_taxi=dispositivo, status__in=self.ECO_HIST
-                ).exclude(status__in=self.EXCLUDED).order_by("-criada_em")[:10]
+                SolicitacaoCorrida.objects
+                    .filter(eco_taxi=dispositivo, status__in=self.ECO_HIST)
+                    .exclude(status__in=self.EXCLUDED)
+                    .order_by("-criada_em")[:10]
             )
             return Response({
                 "tipo": "ecotaxi",
@@ -417,16 +412,19 @@ class CorridasView(APIView):
                 }
             })
 
-        # passageiro
+        # Passageiro
         ativa = (
-            SolicitacaoCorrida.objects.filter(
-                passageiro=dispositivo, status__in=self.PASS_ATIVA
-            ).exclude(status__in=self.EXCLUDED).order_by("-criada_em").first()
+            SolicitacaoCorrida.objects
+                .filter(passageiro=dispositivo, status__in=self.PASS_ATIVA)
+                .exclude(status__in=self.EXCLUDED)
+                .order_by("-criada_em")
+                .first()
         )
         hist = (
-            SolicitacaoCorrida.objects.filter(
-                passageiro=dispositivo, status__in=self.PASS_HIST
-            ).exclude(status__in=self.EXCLUDED).order_by("-criada_em")[:10]
+            SolicitacaoCorrida.objects
+                .filter(passageiro=dispositivo, status__in=self.PASS_HIST)
+                .exclude(status__in=self.EXCLUDED)
+                .order_by("-criada_em")[:10]
         )
         return Response({
             "tipo": "passageiro",

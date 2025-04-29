@@ -216,13 +216,6 @@ class AtualizarTipoDispositivoView(APIView):
         return Response({"mensagem": "Tipo atualizado."})
 
 
-class TipoDispositivoView(APIView):
-    def get(self, request, uuid):
-        dispositivo = Dispositivo.objects.filter(uuid=uuid).first()
-        if not dispositivo:
-            return Response({"tipo": None, "id": None})
-        return Response({"tipo": dispositivo.tipo, "id": dispositivo.id})
-
 
 class DeletarDispositivoPorUUIDView(APIView):
     def delete(self, request, uuid):
@@ -396,46 +389,79 @@ class CorridaAtivaEcoTaxiView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-class CorridasEcoTaxiView(APIView):
+class CorridasView(APIView):
     """
-    Retorna todas as informações de corridas para um ecotaxista:
-    - corrida_ativa: corrida em andamento (accepted ou started)
-    - corridas_pendentes: corridas atribuídas a este ecotaxi
-    - historico: últimas corridas concluídas
+    Retorna informações de corridas para um dispositivo (ecotaxi ou passageiro),
+    excluindo sempre os status: rejected, cancelled, expired.
+
+    - Para EcoTaxi:
+      * corrida_ativa (accepted, started)
+      * corridas_pendentes (pending e não expiradas)
+      * historico (completed)
+      * info_ecotaxi
+    - Para Passageiro:
+      * corrida_ativa (pending, accepted, in_transit)
+      * historico (completed)
+      * info_passageiro
     """
+
+    # statuses que sempre excluímos
+    EXCLUDED_STATUSES = ["rejected", "cancelled", "expired"]
+
+    # quais são “ativas” para cada tipo
+    ECO_STATUS_ATIVA = ["accepted", "started"]
+    ECO_STATUS_PENDENTES = ["pending"]
+    ECO_STATUS_HISTORICO = ["completed"]
+
+    PASS_STATUS_ATIVA = ["pending", "accepted", "in_transit"]
+    PASS_STATUS_HISTORICO = ["completed"]
+
     def get(self, request, uuid):
-        try:
-            dispositivo = Dispositivo.objects.get(uuid=uuid)
-            if dispositivo.tipo != 'ecotaxi':
-                return Response(
-                    {"erro": "Dispositivo não é um EcoTaxi."},
-                    status=status.HTTP_400_BAD_REQUEST
+        dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
+
+        # ECO TAXI
+        if dispositivo.tipo == "ecotaxi":
+            # corrida em andamento
+            corrida_ativa = (
+                SolicitacaoCorrida.objects
+                .filter(
+                    eco_taxi=dispositivo,
+                    status__in=self.ECO_STATUS_ATIVA
                 )
+                .exclude(status__in=self.EXCLUDED_STATUSES)
+                .order_by("-criada_em")
+                .first()
+            )
 
-            # Corrida ativa (em andamento)
-            corrida_ativa = SolicitacaoCorrida.objects.filter(
-                eco_taxi=dispositivo,
-                status__in=["accepted", "started"]
-            ).order_by('-criada_em').first()
+            # pendentes (ainda dentro do prazo)
+            corridas_pendentes = (
+                SolicitacaoCorrida.objects
+                .filter(
+                    eco_taxi=dispositivo,
+                    status__in=self.ECO_STATUS_PENDENTES,
+                    expiracao__gte=timezone.now()
+                )
+                .exclude(status__in=self.EXCLUDED_STATUSES)
+                .order_by("expiracao")
+            )
 
-            # Corridas pendentes (atribuídas a este ecotaxi)
-            corridas_pendentes = SolicitacaoCorrida.objects.filter(
-                eco_taxi=dispositivo,
-                status="pending",
-                expiracao__gte=timezone.now()
-            ).order_by('expiracao')
-
-            # Histórico de corridas concluídas
-            historico = SolicitacaoCorrida.objects.filter(
-                eco_taxi=dispositivo,
-                status__in=["completed", "cancelled"]
-            ).order_by('-criada_em')[:10]  # Últimas 10 corridas
+            # histórico (já finalizadas)
+            historico = (
+                SolicitacaoCorrida.objects
+                .filter(
+                    eco_taxi=dispositivo,
+                    status__in=self.ECO_STATUS_HISTORICO
+                )
+                .exclude(status__in=self.EXCLUDED_STATUSES)
+                .order_by("-criada_em")[:10]
+            )
 
             return Response({
+                "tipo": "ecotaxi",
                 "corrida_ativa": SolicitacaoCorridaDetailSerializer(corrida_ativa).data if corrida_ativa else None,
                 "corridas_pendentes": CorridaEcoTaxiListSerializer(corridas_pendentes, many=True).data,
                 "historico": CorridaEcoTaxiListSerializer(historico, many=True).data,
-                "info_ecotaxi": {
+                "info_dispositivo": {
                     "nome": dispositivo.nome,
                     "status": dispositivo.status,
                     "assentos_disponiveis": dispositivo.assentos_disponiveis,
@@ -443,11 +469,49 @@ class CorridasEcoTaxiView(APIView):
                 }
             })
 
-        except Dispositivo.DoesNotExist:
-            return Response(
-                {"erro": "Dispositivo não encontrado."},
-                status=status.HTTP_404_NOT_FOUND
+        # PASSAGEIRO
+        elif dispositivo.tipo == "passageiro":
+            # corrida em andamento (única)
+            corrida_ativa = (
+                SolicitacaoCorrida.objects
+                .filter(
+                    passageiro=dispositivo,
+                    status__in=self.PASS_STATUS_ATIVA
+                )
+                .exclude(status__in=self.EXCLUDED_STATUSES)
+                .order_by("-criada_em")
+                .first()
             )
+
+            # histórico de corridas finalizadas
+            historico = (
+                SolicitacaoCorrida.objects
+                .filter(
+                    passageiro=dispositivo,
+                    status__in=self.PASS_STATUS_HISTORICO
+                )
+                .exclude(status__in=self.EXCLUDED_STATUSES)
+                .order_by("-criada_em")[:10]
+            )
+
+            return Response({
+                "tipo": "passageiro",
+                "corrida_ativa": SolicitacaoCorridaDetailSerializer(corrida_ativa).data if corrida_ativa else None,
+                "historico": CorridaPassageiroListSerializer(historico, many=True).data,
+                "info_dispositivo": {
+                    "nome": dispositivo.nome,
+                    # adicione aqui outros campos de info_passageiro se quiser
+                }
+            })
+
+        # TIPO INVÁLIDO
+        else:
+            return Response(
+                {"erro": "Tipo de dispositivo inválido."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
 class PassageiroCorridaAtivaView(APIView):
     """
     GET /api/corrida/passageiro/<uuid:uuid>/ativa/

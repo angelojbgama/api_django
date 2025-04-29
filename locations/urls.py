@@ -12,15 +12,14 @@ from .views import (
     CorridaDetailView,
     CorridasDoPassageiroView,
     CorridasEcoTaxiHistoricoView,
-    CorridasEcoTaxiView,
     CorridasParaEcoTaxiView,
     CorridasDisponiveisParaEcoTaxiView,
     CorridasPorUUIDView,
+    CorridasView,
     CriarCorridaView,
     DeletarDispositivoPorUUIDView,
     DispositivoCreateView,
     DispositivoRetrieveUpdateView,
-    TipoDispositivoView,
 )
 
 urlpatterns = [
@@ -44,6 +43,6 @@ urlpatterns = [
     path("corrida/disponiveis/ecotaxi/<uuid:uuid>/", CorridasDisponiveisParaEcoTaxiView.as_view(), name="corridas_disponiveis_ecotaxi"),
     path("corrida/<int:pk>/accept/", AceitarCorridaView.as_view(), name="aceitar_corrida"),
     path("corrida/ativa/ecotaxi/<uuid:uuid>/", CorridaAtivaEcoTaxiView.as_view(), name="corrida_ativa_ecotaxi"),
-    path("corrida/ecotaxi/<uuid:uuid>/", CorridasEcoTaxiView.as_view(), name="corridas_ecotaxi"),
+    path('api/corridas/<uuid:uuid>/',CorridasView.as_view(),name='corridas'),
     path("corrida/uuid/<uuid:uuid>/", CorridasPorUUIDView.as_view(), name="corridas_por_uuid"),
 ]

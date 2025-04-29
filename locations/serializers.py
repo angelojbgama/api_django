@@ -73,3 +73,30 @@ class CorridaEcoTaxiListSerializer(serializers.ModelSerializer):
             "status",
             "expiracao",
         ]
+        
+        
+        
+class CorridaPassageiroListSerializer(serializers.ModelSerializer):
+    """
+    Serializer enxuto para histórico de corridas de um passageiro,
+    incluindo o nome do ecotaxi (se houver).
+    """
+    ecotaxi_nome = serializers.CharField(
+        source='eco_taxi.nome',
+        read_only=True,
+        default=None,
+        help_text="Nome do EcoTaxi que atendeu a corrida (ou null)"
+    )
+
+    class Meta:
+        model = SolicitacaoCorrida
+        fields = [
+            'uuid',
+            'criada_em',
+            'status',
+            'assentos_necessarios',
+            'endereco_partida',
+            'endereco_destino',
+            'ecotaxi_nome',
+        ]
+        read_only_fields = fields

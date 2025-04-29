@@ -18,6 +18,7 @@ from .serializers import (
     DispositivoSerializer,
     SolicitacaoCorridaCreateSerializer,
     SolicitacaoCorridaDetailSerializer,
+    CorridaPassageiroListSerializer   
 )
 # 🔗 Lógica central de matching / repasse
 from locations.utils.ecotaxi_matching import escolher_ecotaxi, repassar_para_proximo_ecotaxi

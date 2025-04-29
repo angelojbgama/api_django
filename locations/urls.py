@@ -14,6 +14,7 @@ from .views import (
     AtualizarTipoDispositivoView,
     DispositivoRetrieveUpdateView,
     PassageiroCorridaAtivaStatusView,
+    PassageiroCorridaAtivaView,
     TipoDispositivoView,
     DeletarDispositivoPorUUIDView,
     AtualizarCorEcoTaxiView,
@@ -115,8 +116,7 @@ urlpatterns = [
     ),
     path(
         'corrida/passageiro/<uuid:uuid>/ativa/',
-        PassageiroCorridaAtivaStatusView.as_view(),
-        name='corrida_passeiro_ativa_status'
+        PassageiroCorridaAtivaView.as_view(),
+        name='corrida_passageiro_ativa'
     ),
-
 ]

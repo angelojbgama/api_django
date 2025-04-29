@@ -461,19 +461,38 @@ class CorridasEcoTaxiView(APIView):
                 {"erro": "Dispositivo não encontrado."},
                 status=status.HTTP_404_NOT_FOUND
             )
-class PassageiroCorridaAtivaStatusView(APIView):
+class PassageiroCorridaAtivaView(APIView):
     """
     GET /api/corrida/passageiro/<uuid:uuid>/ativa/
-    Retorna se o passageiro possui alguma corrida em pending, accepted ou started.
+    Retorna:
+      {
+        "ativa": <bool>,
+        "corrida": { ...todos os campos de SolicitacaoCorrida... } | null
+      }
     """
     def get(self, request, uuid):
-        # garante que existe um dispositivo do tipo passageiro com esse UUID
+        # valida dispositivo do tipo passageiro
         dispositivo = get_object_or_404(Dispositivo, uuid=uuid, tipo='passageiro')
 
-        # verifica existência de corrida nesses três estados
-        existe = SolicitacaoCorrida.objects.filter(
-            passageiro=dispositivo,
-            status__in=['pending', 'accepted', 'started']
-        ).exists()
+        # busca a última corrida em pending, accepted ou started
+        corrida = (
+            SolicitacaoCorrida.objects
+                .filter(
+                    passageiro=dispositivo,
+                    status__in=['pending', 'accepted', 'started']
+                )
+                .order_by('-criada_em')
+                .first()
+        )
 
-        return Response({'ativa': existe})
+        if corrida:
+            serializer = SolicitacaoCorridaDetailSerializer(corrida)
+            return Response({
+                'ativa': True,
+                'corrida': serializer.data
+            })
+        else:
+            return Response({
+                'ativa': False,
+                'corrida': None
+            })

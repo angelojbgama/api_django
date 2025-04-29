@@ -12,7 +12,14 @@ def default_expiracao() -> timezone.datetime:
 class Dispositivo(models.Model):
     TIPO_CHOICES = [
         ("passageiro", "Passageiro"),
-        ("ecotaxi", "EcoTaxi"),
+        ("ecotaxi",    "EcoTaxi"),
+    ]
+
+    STATUS_CHOICES = [
+        ("aguardando",           "Aguardando Corrida"),
+        ("aguardando_resposta",  "Aguardando Resposta"),
+        ("transito",             "Em Trânsito"),
+        ("fora",                 "Fora de Serviço"),
     ]
 
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -22,11 +29,7 @@ class Dispositivo(models.Model):
 
     status = models.CharField(
         max_length=20,
-        choices=[
-            ("aguardando", "Aguardando Corrida"),
-            ("transito", "Em Trânsito"),
-            ("fora", "Fora de Serviço"),
-        ],
+        choices=STATUS_CHOICES,
         default="fora",
     )
     latitude = models.FloatField(null=True, blank=True)
@@ -83,6 +86,8 @@ class SolicitacaoCorrida(models.Model):
     expiracao  = models.DateTimeField(default=default_expiracao)
 
     def __str__(self) -> str:
-        return (f"Corrida de {self.passageiro.nome} → "
-                f"{self.endereco_destino or 'Destino'} "
-                f"({self.get_status_display()})")
+        return (
+            f"Corrida de {self.passageiro.nome} → "
+            f"{self.endereco_destino or 'Destino'} "
+            f"({self.get_status_display()})"
+        )

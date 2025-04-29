@@ -13,6 +13,7 @@ from .views import (
     AtualizarNomeDispositivoView,
     AtualizarTipoDispositivoView,
     DispositivoRetrieveUpdateView,
+    PassageiroCorridaAtivaStatusView,
     TipoDispositivoView,
     DeletarDispositivoPorUUIDView,
     AtualizarCorEcoTaxiView,
@@ -95,23 +96,27 @@ urlpatterns = [
         name="atualizar_assentos_ecotaxi",
     ),
     path(
-    "corrida/disponiveis/ecotaxi/<uuid:uuid>/",
-    CorridasDisponiveisParaEcoTaxiView.as_view(),
-    name="corridas_disponiveis_ecotaxi",
+        "corrida/disponiveis/ecotaxi/<uuid:uuid>/",
+        CorridasDisponiveisParaEcoTaxiView.as_view(),
+        name="corridas_disponiveis_ecotaxi",
     ),
     path(
-    "corrida/<int:pk>/accept/",
-    AceitarCorridaView.as_view(),
-    name="aceitar_corrida"
+        "corrida/<int:pk>/accept/", AceitarCorridaView.as_view(), name="aceitar_corrida"
     ),
     path(
-    "corrida/ativa/ecotaxi/<uuid:uuid>/",
-    CorridaAtivaEcoTaxiView.as_view(),
-    name="corrida_ativa_ecotaxi"
-),
-path(
-    "corrida/ecotaxi/<uuid:uuid>/",
-    CorridasEcoTaxiView.as_view(),
-    name="corridas_ecotaxi"
-),
+        "corrida/ativa/ecotaxi/<uuid:uuid>/",
+        CorridaAtivaEcoTaxiView.as_view(),
+        name="corrida_ativa_ecotaxi",
+    ),
+    path(
+        "corrida/ecotaxi/<uuid:uuid>/",
+        CorridasEcoTaxiView.as_view(),
+        name="corridas_ecotaxi",
+    ),
+    path(
+        'corrida/passageiro/<uuid:uuid>/ativa/',
+        PassageiroCorridaAtivaStatusView.as_view(),
+        name='corrida_passeiro_ativa_status'
+    ),
+
 ]

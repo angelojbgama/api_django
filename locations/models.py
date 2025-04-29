@@ -43,16 +43,17 @@ class Dispositivo(models.Model):
 
 class SolicitacaoCorrida(models.Model):
     STATUS_CHOICES = [
-        ("pending", "Pendente"),
-        ("accepted", "Aceita"),
-        ("rejected", "Recusada"),
+        ("pending",   "Pendente"),
+        ("accepted",  "Aceita"),
+        ("started",   "Em Trânsito"),   # ← nova opção
+        ("rejected",  "Recusada"),
         ("cancelled", "Cancelada"),
         ("completed", "Concluída"),
-        ("expired", "Expirada"),
+        ("expired",   "Expirada"),
     ]
-    
-    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)  
-    
+
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
     passageiro = models.ForeignKey(
         Dispositivo,
         on_delete=models.CASCADE,
@@ -68,19 +69,24 @@ class SolicitacaoCorrida(models.Model):
         limit_choices_to={"tipo": "ecotaxi"},
     )
 
-    latitude_partida = models.FloatField()
-    longitude_partida = models.FloatField()
-    endereco_partida = models.CharField(max_length=255, blank=True)
+    latitude_partida      = models.FloatField()
+    longitude_partida     = models.FloatField()
+    endereco_partida      = models.CharField(max_length=255, blank=True)
+    latitude_destino      = models.FloatField()
+    longitude_destino     = models.FloatField()
+    endereco_destino      = models.CharField(max_length=255, blank=True)
 
-    latitude_destino = models.FloatField()
-    longitude_destino = models.FloatField()
-    endereco_destino = models.CharField(max_length=255, blank=True)
-
-    assentos_necessarios = models.PositiveIntegerField(default=1)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
+    assentos_necessarios  = models.PositiveIntegerField(default=1)
+    status                = models.CharField(
+                              max_length=10,
+                              choices=STATUS_CHOICES,
+                              default="pending"
+                           )
 
     criada_em = models.DateTimeField(auto_now_add=True)
-    expiracao = models.DateTimeField(default=default_expiracao)
+    expiracao  = models.DateTimeField(default=default_expiracao)
 
     def __str__(self):
-        return f"Corrida de {self.passageiro.nome} para {self.endereco_destino or 'Destino'} ({self.get_status_display()})"
+        return (f"Corrida de {self.passageiro.nome} para "
+                f"{self.endereco_destino or 'Destino'} "
+                f"({self.get_status_display()})")

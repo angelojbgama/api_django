@@ -13,7 +13,6 @@ from .views import (
     AtualizarNomeDispositivoView,
     AtualizarTipoDispositivoView,
     DispositivoRetrieveUpdateView,
-    PassageiroCorridaAtivaStatusView,
     PassageiroCorridaAtivaView,
     TipoDispositivoView,
     DeletarDispositivoPorUUIDView,

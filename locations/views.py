@@ -125,13 +125,18 @@ class AtualizarStatusCorridaView(APIView):
             return Response({'erro': 'Status inválido.'}, status=status.HTTP_400_BAD_REQUEST)
 
         def _devolver_assentos():
-            ecotaxi = corrida.eco_taxi
-            if ecotaxi:
-                ecotaxi.assentos_disponiveis = F('assentos_disponiveis') + corrida.assentos_necessarios
-                ecotaxi.status = 'aguardando'
-                ecotaxi.save(update_fields=['assentos_disponiveis', 'status'])
+            """
+            Devolve assentos usando UPDATE direto no banco
+            (evita sobrescrever dados sujos da instância em memória).
+            """
+            if corrida.eco_taxi_id is None:
+                return
 
-        # REJEITAR
+            Dispositivo.objects.filter(pk=corrida.eco_taxi_id).update(
+                assentos_disponiveis=F('assentos_disponiveis') + corrida.assentos_necessarios,
+                status='aguardando'
+            )
+
         if novo_status == 'rejected':
             with transaction.atomic():
                 _devolver_assentos()

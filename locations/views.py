@@ -278,8 +278,6 @@ class CorridasPorUUIDView(ListAPIView):
 
 
 
-
-
 class AceitarCorridaView(APIView):
     """
     POST /api/corrida/<int:pk>/accept/
@@ -290,19 +288,21 @@ class AceitarCorridaView(APIView):
             SolicitacaoCorrida,
             pk=pk,
             status="pending",
-            eco_taxi__isnull=True
+            eco_taxi__isnull=False   # ← já está reservado pela criação
         )
         ecotaxi_id = request.data.get("eco_taxi_id")
-        ecotaxi = get_object_or_404(Dispositivo, pk=ecotaxi_id, tipo="ecotaxi")
-        if ecotaxi.assentos_disponiveis < corrida.assentos_necessarios:
-            return Response({"erro": "Assentos insuficientes."}, status=status.HTTP_400_BAD_REQUEST)
+        if corrida.eco_taxi_id != ecotaxi_id:
+            return Response({"erro": "Esta corrida não está reservada para você."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         with transaction.atomic():
-            ecotaxi.assentos_disponiveis = F("assentos_disponiveis") - corrida.assentos_necessarios
-            ecotaxi.status = "aguardando_resposta"
-            ecotaxi.save(update_fields=["assentos_disponiveis", "status"])
-            corrida.eco_taxi = ecotaxi
+            # NÃO subtrai de novo – já foi – só muda status
+            corrida.eco_taxi.status = "aguardando_resposta"
+            corrida.eco_taxi.save(update_fields=["status"])
+
             corrida.status = "accepted"
-            corrida.save(update_fields=["eco_taxi", "status"])
+            corrida.save(update_fields=["status"])
+
         return Response({"mensagem": "Corrida aceita."})
 
 

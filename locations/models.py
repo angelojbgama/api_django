@@ -60,7 +60,6 @@ class SolicitacaoCorrida(models.Model):
         Dispositivo,
         on_delete=models.CASCADE,
         related_name="corridas_passageiro",
-        limit_choices_to={"tipo": "passageiro"},
     )
     eco_taxi = models.ForeignKey(
         Dispositivo,

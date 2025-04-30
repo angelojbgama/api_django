@@ -115,17 +115,17 @@ class AtualizarStatusCorridaView(APIView):
 
         def _devolver():
             """
-            Sempre devolve os assentos ao EcoTaxi, pois eles já foram reservados na criação da corrida.
+            Devolve os assentos ao EcoTaxi. Sempre deve ser chamado quando a corrida for
+            cancelada ou concluída, pois os assentos já foram debitados na criação da corrida.
             """
             if corrida.eco_taxi_id:
                 Dispositivo.objects.filter(pk=corrida.eco_taxi_id).update(
-                    assentos_disponiveis=F("assentos_disponiveis")+ corrida.assentos_necessarios,
-                    status="aguardando",)
+                    assentos_disponiveis=F("assentos_disponiveis") + corrida.assentos_necessarios,
+                    status="aguardando",
+                )
 
-        # ——— REJECTED ———
         if novo == "rejected":
             with transaction.atomic():
-                # nada de devolver (assentos ainda não debitados)
                 corrida.eco_taxi = None
                 corrida.status = "pending"
                 corrida.expiracao = timezone.now() + timedelta(minutes=5)
@@ -133,7 +133,6 @@ class AtualizarStatusCorridaView(APIView):
                 repassar_para_proximo_ecotaxi(corrida)
             return Response({"mensagem": "Corrida recusada e repassada."})
 
-        # ——— CANCELLED ———
         if novo == "cancelled":
             with transaction.atomic():
                 _devolver()
@@ -142,7 +141,6 @@ class AtualizarStatusCorridaView(APIView):
                 corrida.save(update_fields=["eco_taxi", "status"])
             return Response({"mensagem": "Corrida cancelada."})
 
-        # ——— COMPLETED ———
         if novo == "completed":
             with transaction.atomic():
                 _devolver()
@@ -150,7 +148,6 @@ class AtualizarStatusCorridaView(APIView):
                 corrida.save(update_fields=["status"])
             return Response({"mensagem": "Corrida concluída."})
 
-        # ——— ACCEPTED / STARTED ———
         if novo in {"accepted", "started"} and corrida.eco_taxi:
             corrida.eco_taxi.status = (
                 "aguardando_resposta" if novo == "accepted" else "transito"

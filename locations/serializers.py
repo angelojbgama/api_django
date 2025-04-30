@@ -31,7 +31,9 @@ class SolicitacaoCorridaCreateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         passageiro = data.get("passageiro")
         if passageiro.tipo != "passageiro":
-            raise serializers.ValidationError("Dispositivo informado não é um passageiro.")
+            raise serializers.ValidationError(
+                "Dispositivo informado não é um passageiro."
+            )
 
         aberto = SolicitacaoCorrida.objects.filter(
             passageiro=passageiro,
@@ -50,7 +52,7 @@ class SolicitacaoCorridaCreateSerializer(serializers.ModelSerializer):
 
 class SolicitacaoCorridaDetailSerializer(serializers.ModelSerializer):
     passageiro = DispositivoSerializer()
-    eco_taxi   = DispositivoSerializer()
+    eco_taxi = DispositivoSerializer()
 
     class Meta:
         model = SolicitacaoCorrida
@@ -73,30 +75,64 @@ class CorridaEcoTaxiListSerializer(serializers.ModelSerializer):
             "status",
             "expiracao",
         ]
-        
-        
-        
+
+
 class CorridaPassageiroListSerializer(serializers.ModelSerializer):
     """
     Serializer enxuto para histórico de corridas de um passageiro,
     incluindo o nome do ecotaxi (se houver).
     """
+
     ecotaxi_nome = serializers.CharField(
-        source='eco_taxi.nome',
+        source="eco_taxi.nome",
         read_only=True,
         default=None,
-        help_text="Nome do EcoTaxi que atendeu a corrida (ou null)"
+        help_text="Nome do EcoTaxi que atendeu a corrida (ou null)",
     )
 
     class Meta:
         model = SolicitacaoCorrida
         fields = [
-            'uuid',
-            'criada_em',
-            'status',
-            'assentos_necessarios',
-            'endereco_partida',
-            'endereco_destino',
-            'ecotaxi_nome',
+            "uuid",
+            "criada_em",
+            "status",
+            "assentos_necessarios",
+            "endereco_partida",
+            "endereco_destino",
+            "ecotaxi_nome",
         ]
         read_only_fields = fields
+
+
+class DispositivoUpdateSerializer(serializers.ModelSerializer):
+    """
+    Campos opcionais; validados conforme o tipo do dispositivo.
+    """
+
+    class Meta:
+        model = Dispositivo
+        fields = ["nome", "cor_ecotaxi", "assentos_disponiveis"]
+
+        # todos opcionais → partial=True
+        extra_kwargs = {f: {"required": False} for f in fields}
+
+    def validate(self, attrs):
+        dispositivo: Dispositivo = self.instance  # já carregado na view
+
+        # Passageiro NÃO pode enviar cor nem assentos
+        if dispositivo.tipo == "passageiro":
+            bloqueados = {"cor_ecotaxi", "assentos_disponiveis"} & attrs.keys()
+            if bloqueados:
+                raise serializers.ValidationError(
+                    {k: "Somente EcoTaxi pode alterar este campo." for k in bloqueados}
+                )
+
+        # Se assentos vier, cheque intervalo aceitável (1-5)
+        if "assentos_disponiveis" in attrs:
+            assentos = attrs["assentos_disponiveis"]
+            if not (1 <= assentos <= 5):
+                raise serializers.ValidationError(
+                    {"assentos_disponiveis": "Valor deve estar entre 1 e 5."}
+                )
+
+        return attrs

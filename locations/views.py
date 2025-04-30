@@ -160,20 +160,6 @@ class AtualizarStatusCorridaView(APIView):
 
 
 # ────────────────────────────────────────────────────────────────
-# 4) PENDENTES PARA UM ECOTAXI
-# ────────────────────────────────────────────────────────────────
-class CorridasParaEcoTaxiView(ListAPIView):
-    serializer_class = CorridaEcoTaxiListSerializer
-
-    def get_queryset(self):
-        return SolicitacaoCorrida.objects.filter(
-            eco_taxi_id=self.kwargs["pk"],
-            status="pending",
-            expiracao__gte=timezone.now(),
-        ).order_by("expiracao")
-
-
-# ────────────────────────────────────────────────────────────────
 # 5) CRUD DE DISPOSITIVO
 # ────────────────────────────────────────────────────────────────
 class DispositivoCreateView(generics.CreateAPIView):
@@ -248,7 +234,7 @@ class AceitarCorridaView(APIView):
             status="pending",
         )
         eco_id = request.data.get("eco_taxi_id")
-        if corrida.eco_taxi_id != eco_id:
+        if str(corrida.eco_taxi_id) != str(eco_id):
             return Response({"erro": "Esta corrida não é sua."}, status=400)
 
         taxi = get_object_or_404(Dispositivo, pk=eco_id, tipo="ecotaxi")
@@ -263,6 +249,7 @@ class AceitarCorridaView(APIView):
             )
             taxi.status = "aguardando_resposta"
             taxi.save(update_fields=["assentos_disponiveis", "status"])
+            taxi.refresh_from_db()  # ← ESSENCIAL para evitar CombinedExpression no serializer
 
             corrida.status = "accepted"
             corrida.save(update_fields=["status"])

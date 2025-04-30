@@ -376,82 +376,92 @@ class CorridaAtivaEcoTaxiView(APIView):
 class CorridasView(APIView):
     """
     GET /api/corridas/<uuid:uuid>/
-    Retorna corridas para ecotaxi ou passageiro, excluindo sempre
-    rejected, cancelled, expired.
-    - EcoTaxi:
-      * corrida_ativa (accepted, started)
-      * corridas_pendentes (pending ainda não expiradas)
-      * historico (completed)
-    - Passageiro:
-      * corrida_ativa (pending, accepted, started)
-      * historico (completed)
+
+    Retorna corridas para ecotaxi ou passageiro.
+
+    – EcoTaxi:
+        • corrida_ativa       (accepted, started)
+        • corridas_pendentes  (pending)
+        • historico           (completed)
+    – Passageiro:
+        • corrida_ativa       (pending, accepted, started)
+        • historico           (completed)
     """
     EXCLUDED   = ["rejected", "cancelled", "expired"]
+
     ECO_ATIVA  = ["accepted", "started"]
-    ECO_PEND   = ["pending"]
+    ECO_PEND   = ["pending"]               # ← apenas o value salvo no banco
     ECO_HIST   = ["completed"]
-    PASS_ATIVA = ["pending", "accepted", "started"]  # inclui 'started'
+
+    PASS_ATIVA = ["pending", "accepted", "started"]
     PASS_HIST  = ["completed"]
 
     def get(self, request, uuid):
         dispositivo = get_object_or_404(Dispositivo, uuid=uuid)
 
-        # ——— EcoTaxi ———
+        # ————————————————————————————— ECO-TAXI ————————————————————————————
         if dispositivo.tipo == "ecotaxi":
-            # Corrida ativa (accepted ou started)
             corrida_ativa = (
                 SolicitacaoCorrida.objects
                 .filter(
                     eco_taxi=dispositivo,
-                    status__in=self.ECO_ATIVA
+                    status__in=self.ECO_ATIVA,
                 )
                 .exclude(status__in=self.EXCLUDED)
                 .order_by("-criada_em")
                 .first()
             )
 
-            # Corridas pendentes (pending não expiradas)
-            corridas_pendentes = (
+            # ———  pendentes  ———
+            corridas_pendentes_qs = (
                 SolicitacaoCorrida.objects
                 .filter(
                     eco_taxi=dispositivo,
                     status__in=self.ECO_PEND,
-                    expiracao__gte=timezone.now()
+                    #  REMOVIDO para testar fuso/expiração
+                    #  expiracao__gte=timezone.now(),
                 )
                 .exclude(status__in=self.EXCLUDED)
                 .order_by("expiracao")
             )
 
-            # Histórico (completed)
+            #  LOG de debug  ➜  veja no runserver
+            print(
+                "DEBUG pendentes =>",
+                list(
+                    corridas_pendentes_qs.values("id", "status", "expiracao")
+                )
+            )
+
             historico = (
                 SolicitacaoCorrida.objects
                 .filter(
                     eco_taxi=dispositivo,
-                    status__in=self.ECO_HIST
+                    status__in=self.ECO_HIST,
                 )
                 .exclude(status__in=self.EXCLUDED)
                 .order_by("-criada_em")[:10]
             )
 
             return Response({
-                "tipo": "ecotaxi",
-                "corrida_ativa": SolicitacaoCorridaDetailSerializer(corrida_ativa).data if corrida_ativa else None,
-                "corridas_pendentes": CorridaEcoTaxiListSerializer(corridas_pendentes, many=True).data,
-                "historico": CorridaEcoTaxiListSerializer(historico, many=True).data,
+                "tipo":               "ecotaxi",
+                "corrida_ativa":      SolicitacaoCorridaDetailSerializer(corrida_ativa).data if corrida_ativa else None,
+                "corridas_pendentes": CorridaEcoTaxiListSerializer(corridas_pendentes_qs, many=True).data,
+                "historico":          CorridaEcoTaxiListSerializer(historico, many=True).data,
                 "info_dispositivo": {
-                    "nome": dispositivo.nome,
-                    "status": dispositivo.status,
+                    "nome":                 dispositivo.nome,
+                    "status":               dispositivo.status,
                     "assentos_disponiveis": dispositivo.assentos_disponiveis,
-                    "cor_ecotaxi": dispositivo.cor_ecotaxi,
+                    "cor_ecotaxi":          dispositivo.cor_ecotaxi,
                 }
             })
 
-        # ——— Passageiro ———
+        # ————————————————————————— PASSAGEIRO ————————————————————————————
         corrida_ativa = (
             SolicitacaoCorrida.objects
             .filter(
                 passageiro=dispositivo,
-                status__in=self.PASS_ATIVA
+                status__in=self.PASS_ATIVA,
             )
             .exclude(status__in=self.EXCLUDED)
             .order_by("-criada_em")
@@ -462,16 +472,16 @@ class CorridasView(APIView):
             SolicitacaoCorrida.objects
             .filter(
                 passageiro=dispositivo,
-                status__in=self.PASS_HIST
+                status__in=self.PASS_HIST,
             )
             .exclude(status__in=self.EXCLUDED)
             .order_by("-criada_em")[:10]
         )
 
         return Response({
-            "tipo": "passageiro",
+            "tipo":          "passageiro",
             "corrida_ativa": SolicitacaoCorridaDetailSerializer(corrida_ativa).data if corrida_ativa else None,
-            "historico": CorridaPassageiroListSerializer(historico, many=True).data,
+            "historico":     CorridaPassageiroListSerializer(historico, many=True).data,
             "info_dispositivo": {
                 "nome": dispositivo.nome,
             }

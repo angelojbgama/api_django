@@ -56,33 +56,38 @@ def escolher_ecotaxi(
         ecotaxi.assentos_disponiveis = F("assentos_disponiveis") - assentos_necessarios
         ecotaxi.status = "aguardando_resposta"
         ecotaxi.save(update_fields=["assentos_disponiveis", "status"])
-
+        ecotaxi.refresh_from_db()
         return ecotaxi
 
 
 def repassar_para_proximo_ecotaxi(corrida: SolicitacaoCorrida) -> None:
-    if corrida.status not in {"pending", "expired"}:
+    if corrida.status != "pending":
         return
 
+    uuid_atual = str(corrida.eco_taxi_id) if corrida.eco_taxi_id else None
+
     novo_ecotaxi = escolher_ecotaxi(
-        corrida.latitude_destino,
-        corrida.longitude_destino,
-        corrida.assentos_necessarios,
-        excluir_uuid=corrida.eco_taxi_id,      # 👈 já vem uuid
+        latitude=corrida.latitude_destino,
+        longitude=corrida.longitude_destino,
+        assentos_necessarios=corrida.assentos_necessarios,
+        excluir_uuid=uuid_atual,  # ❌ exclui o atual
     )
 
+    # Nenhum novo ecotaxi encontrado
     if not novo_ecotaxi:
-        corrida.status = "expired"
-        corrida.save(update_fields=["status"])
-        logging.info("🚫 Nenhum EcoTaxi disponível — corrida %s expirada.", corrida.id)
+        logging.info("🚫 Nenhum novo EcoTaxi disponível para corrida %s", corrida.id)
+        return
+
+    # Se retornou o mesmo ecotaxi por algum erro, não faz nada
+    if novo_ecotaxi.uuid == corrida.eco_taxi_id:
+        logging.warning("⚠️ EcoTaxi novo é o mesmo da corrida %s — ignorando", corrida.id)
         return
 
     corrida.eco_taxi  = novo_ecotaxi
-    corrida.status    = "pending"
     corrida.expiracao = timezone.now() + timedelta(minutes=5)
-    corrida.save(update_fields=["eco_taxi", "status", "expiracao"])
+    corrida.save(update_fields=["eco_taxi", "expiracao"])
     logging.info(
-        "🔄 Corrida %s repassada para EcoTaxi %s",
+        "🔄 Corrida %s repassada para novo EcoTaxi %s",
         corrida.id,
         novo_ecotaxi.uuid,
     )

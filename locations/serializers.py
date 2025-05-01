@@ -7,8 +7,6 @@ from .models import Dispositivo, SolicitacaoCorrida
 
 
 class DispositivoSerializer(serializers.ModelSerializer):
-    uuid = serializers.UUIDField(required=True)
-
     class Meta:
         model = Dispositivo
         fields = "__all__"

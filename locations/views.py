@@ -373,49 +373,53 @@ class CorridasPorUUIDView(ListAPIView):
 
 class TrocarMotoristaView(APIView):
     """
-    PATCH /api/corrida/<uuid>/trocar_motorista/
-    Corpo: { "passageiro_uuid": "..." }
-
-    Troca o EcoTaxi da corrida se disponível. Devolve assentos se necessário.
+    PATCH /api/corrida/<uuid:uuid>/trocar_motorista/
+    Body: { "passageiro_uuid": "<uuid>" }
     """
-
     permission_classes = [AllowAny]
 
     def patch(self, request, uuid):
+        # 1) valida corrida e passageiro
         corrida = get_object_or_404(SolicitacaoCorrida, uuid=uuid)
         passageiro_uuid = request.data.get("passageiro_uuid")
-
         if not passageiro_uuid:
             return Response({"erro": "UUID do passageiro é obrigatório."}, status=400)
 
-        passageiro = get_object_or_404(Dispositivo, uuid=passageiro_uuid, tipo="passageiro")
-
+        passageiro = get_object_or_404(
+            Dispositivo, uuid=passageiro_uuid, tipo="passageiro"
+        )
         if corrida.passageiro_id != passageiro.pk:
             return Response({"erro": "Esta corrida não pertence a este passageiro."}, status=403)
 
-        if corrida.status not in ["pending"]:
-            return Response({"erro": "Apenas corridas pendentes podem trocar de motorista."}, status=400)
+        if corrida.status not in ["pending", "accepted", "started"]:
+            return Response({"erro": "Apenas corridas ativas podem trocar motorista."}, status=400)
 
-        # Seleciona outro EcoTaxi, exceto o atual
+        # 2) escolhe outro ecotaxi (pela UUID) e NÃO debita assentos ainda
+        excluir = (
+            str(corrida.eco_taxi.uuid)
+            if corrida.eco_taxi is not None
+            else None
+        )
         novo = escolher_ecotaxi(
             corrida.latitude_partida,
             corrida.longitude_partida,
             corrida.assentos_necessarios,
-            excluir_id=corrida.eco_taxi_id,
+            excluir_uuid=excluir,         # ✂ corrigido
+            debitar_assentos=False,       # ✂ certifica-se de NÃO debitar agora
         )
 
         if not novo:
             return Response({"mensagem": "Nenhum novo EcoTaxi disponível."}, status=200)
 
+        # 3) faz a troca e renova expiração
         with transaction.atomic():
-            # Se assentos já foram debitados (accepted ou started), devolve ao atual
             if corrida.status in ["accepted", "started"] and corrida.eco_taxi_id:
+                # devolve assentos ao antigo
                 Dispositivo.objects.filter(pk=corrida.eco_taxi_id).update(
                     assentos_disponiveis=F("assentos_disponiveis") + corrida.assentos_necessarios,
                     status="aguardando"
                 )
 
-            # Atualiza corrida com novo motorista e renova expiração
             corrida.eco_taxi = novo
             corrida.status = "pending"
             corrida.expiracao = timezone.now() + timedelta(minutes=5)
@@ -424,7 +428,8 @@ class TrocarMotoristaView(APIView):
             novo.status = "aguardando"
             novo.save(update_fields=["status"])
 
+        # 4) retorna JSON limpinho
         return Response({
             "mensagem": "Motorista trocado com sucesso.",
             "corrida": SolicitacaoCorridaDetailSerializer(corrida).data
-        })
+        }, status=200)

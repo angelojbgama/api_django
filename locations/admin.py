@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Dispositivo, SolicitacaoCorrida
+from django.db.models import F
 
 
 @admin.register(Dispositivo)

@@ -1,10 +1,3 @@
-# locations/utils/ecotaxi_matching.py
-# ===============================================================
-#  VERSÃO 100 % UUID (Dispositivo usa uuid como PK)
-# ---------------------------------------------------------------
-# • Remove TODAS as menções a id.
-# • Filtros, exclusões e buscas usam uuid.
-# ===============================================================
 import logging
 from datetime import timedelta
 from typing import Optional
@@ -16,12 +9,12 @@ from geopy.distance import geodesic
 
 from locations.models import Dispositivo, SolicitacaoCorrida
 
-
 def escolher_ecotaxi(
     latitude: float,
     longitude: float,
     assentos_necessarios: int = 1,
-    excluir_uuid: str | None = None,   # 👈 agora é uuid
+    excluir_uuid: str | None = None,
+    debitar_assentos: bool = True,  # 👈 novo parâmetro
 ) -> Optional[Dispositivo]:
     filtros = Q(
         tipo="ecotaxi",
@@ -30,15 +23,16 @@ def escolher_ecotaxi(
         latitude__isnull=False,
         longitude__isnull=False,
     )
+
     if excluir_uuid:
-        filtros &= ~Q(uuid=excluir_uuid)       # 👈 usa uuid aqui
+        filtros &= ~Q(uuid=excluir_uuid)
 
     with transaction.atomic():
         candidatos = list(
             Dispositivo.objects
             .select_for_update(skip_locked=True)
             .filter(filtros)
-            .values("uuid", "latitude", "longitude", "assentos_disponiveis")  # 👈 uuid
+            .values("uuid", "latitude", "longitude", "assentos_disponiveis")
         )
 
         if not candidatos:
@@ -50,15 +44,20 @@ def escolher_ecotaxi(
                 (c["latitude"], c["longitude"]),
             ).meters
         )
-        ecotaxi_uuid = candidatos[0]["uuid"]   # 👈 pega uuid
 
+        ecotaxi_uuid = candidatos[0]["uuid"]
         ecotaxi = Dispositivo.objects.select_for_update().get(uuid=ecotaxi_uuid)
-        ecotaxi.assentos_disponiveis = F("assentos_disponiveis") - assentos_necessarios
-        ecotaxi.status = "aguardando_resposta"
-        ecotaxi.save(update_fields=["assentos_disponiveis", "status"])
+
+        if debitar_assentos:
+            ecotaxi.assentos_disponiveis = F("assentos_disponiveis") - assentos_necessarios
+            ecotaxi.status = "aguardando_resposta"
+            ecotaxi.save(update_fields=["assentos_disponiveis", "status"])
+        else:
+            ecotaxi.status = "aguardando"
+            ecotaxi.save(update_fields=["status"])
+
         ecotaxi.refresh_from_db()
         return ecotaxi
-
 
 def repassar_para_proximo_ecotaxi(corrida: SolicitacaoCorrida) -> None:
     if corrida.status != "pending":

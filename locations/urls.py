@@ -13,6 +13,7 @@ from .views import (
     DispositivoRetrieveUpdateView,
     AtualizarTipoDispositivoView,
     DeletarDispositivoPorUUIDView,
+    TrocarMotoristaView,
 )
 
 urlpatterns = [
@@ -29,4 +30,6 @@ urlpatterns = [
     path("dispositivo/<uuid:uuid>/atualizar_tipo/",AtualizarTipoDispositivoView.as_view(),),
     path("dispositivo/<uuid:uuid>/deletar/", DeletarDispositivoPorUUIDView.as_view()),
     path("dispositivo/<uuid:uuid>/atualizar/",AtualizarDispositivoView.as_view(),name="dispositivo_atualizar",),
+    path("corrida/<uuid:uuid>/trocar_motorista/", TrocarMotoristaView.as_view()),
+
 ]

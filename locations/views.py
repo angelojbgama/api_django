@@ -369,3 +369,62 @@ class CorridasPorUUIDView(ListAPIView):
         return SolicitacaoCorrida.objects.filter(
             eco_taxi=disp, status__in=["accepted", "completed"]
         ).order_by("-criada_em")
+
+
+class TrocarMotoristaView(APIView):
+    """
+    PATCH /api/corrida/<uuid>/trocar_motorista/
+    Corpo: { "passageiro_uuid": "..." }
+
+    Troca o EcoTaxi da corrida se disponível. Devolve assentos se necessário.
+    """
+
+    permission_classes = [AllowAny]
+
+    def patch(self, request, uuid):
+        corrida = get_object_or_404(SolicitacaoCorrida, uuid=uuid)
+        passageiro_uuid = request.data.get("passageiro_uuid")
+
+        if not passageiro_uuid:
+            return Response({"erro": "UUID do passageiro é obrigatório."}, status=400)
+
+        passageiro = get_object_or_404(Dispositivo, uuid=passageiro_uuid, tipo="passageiro")
+
+        if corrida.passageiro_id != passageiro.pk:
+            return Response({"erro": "Esta corrida não pertence a este passageiro."}, status=403)
+
+        if corrida.status not in ["pending"]:
+            return Response({"erro": "Apenas corridas pendentes podem trocar de motorista."}, status=400)
+
+        # Seleciona outro EcoTaxi, exceto o atual
+        novo = escolher_ecotaxi(
+            corrida.latitude_partida,
+            corrida.longitude_partida,
+            corrida.assentos_necessarios,
+            excluir_id=corrida.eco_taxi_id,
+        )
+
+        if not novo:
+            return Response({"mensagem": "Nenhum novo EcoTaxi disponível."}, status=200)
+
+        with transaction.atomic():
+            # Se assentos já foram debitados (accepted ou started), devolve ao atual
+            if corrida.status in ["accepted", "started"] and corrida.eco_taxi_id:
+                Dispositivo.objects.filter(pk=corrida.eco_taxi_id).update(
+                    assentos_disponiveis=F("assentos_disponiveis") + corrida.assentos_necessarios,
+                    status="aguardando"
+                )
+
+            # Atualiza corrida com novo motorista e renova expiração
+            corrida.eco_taxi = novo
+            corrida.status = "pending"
+            corrida.expiracao = timezone.now() + timedelta(minutes=5)
+            corrida.save(update_fields=["eco_taxi", "status", "expiracao"])
+
+            novo.status = "aguardando"
+            novo.save(update_fields=["status"])
+
+        return Response({
+            "mensagem": "Motorista trocado com sucesso.",
+            "corrida": SolicitacaoCorridaDetailSerializer(corrida).data
+        })

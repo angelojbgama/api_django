@@ -197,7 +197,13 @@ class AtualizarTipoDispositivoView(APIView):
         tipo = request.data.get("tipo")
         if tipo not in ["passageiro", "ecotaxi"]:
             return Response({"erro": "Tipo inválido"}, status=400)
-        disp = get_object_or_404(Dispositivo, uuid=uuid)
+        
+        # 🔽 Cria o dispositivo automaticamente se não existir
+        disp, _ = Dispositivo.objects.get_or_create(uuid=uuid, defaults={
+            "nome": "Novo usuário",  # você pode ajustar isso
+            "tipo": tipo,            # ou começar como passageiro
+        })
+
         disp.tipo = tipo
         disp.save()
         return Response({"mensagem": "Tipo atualizado."})

@@ -50,6 +50,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
+    'DEFAULT_CHARSET': 'utf-8',
 }
 
 MIDDLEWARE = [

@@ -1,16 +1,8 @@
-# views.py
-# Revisão 2025-05-14  –  novo fluxo de assentos
-# • NÃO debita assentos na criação (pending)
-# • Debita apenas quando o EcoTaxi aceita (accepted)
-# • Devolve somente se a corrida estava accepted / started
-
 from __future__ import annotations
 
 from datetime import timedelta
-from uuid import uuid4
 
-from django.db import transaction, IntegrityError
-from django.db.models import F
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
@@ -35,14 +27,10 @@ from locations.utils.ecotaxi_matching import (
 
 
 # ────────────────────────────────────────────────────────────────
-# 1) CRIAR CORRIDA  –  NADA de assentos aqui
+# 1) CRIAR CORRIDA
 # ────────────────────────────────────────────────────────────────
 class CriarCorridaView(CreateAPIView):
-    """
-    POST /api/corrida/nova/
-    Se houver EcoTaxi disponível ele já é vinculado,
-    mas os assentos só serão debitados quando o motorista aceitar.
-    """
+    """POST /api/corrida/nova/ — vincula automaticamente um EcoTaxi disponível."""
 
     serializer_class = SolicitacaoCorridaCreateSerializer
 
@@ -54,7 +42,6 @@ class CriarCorridaView(CreateAPIView):
         eco = escolher_ecotaxi(
             validated["latitude_partida"],
             validated["longitude_partida"],
-            validated["assentos_necessarios"],
         )
         if eco is None:
             return Response(
@@ -97,12 +84,7 @@ class CorridaDetailView(generics.RetrieveAPIView):
 # 3) ATUALIZAR STATUS (cancelar / concluir / etc.)
 # ────────────────────────────────────────────────────────────────
 class AtualizarStatusCorridaView(APIView):
-    """
-    PATCH /api/corrida/<uuid>/status/
-    accepted / started  → só atualiza status/eco_taxi
-    cancelled / completed → devolve assentos *SE* foi debitado
-    rejected → repassa para outro e não devolve (ainda não debitou)
-    """
+    """PATCH /api/corrida/<uuid>/status/ — controla o fluxo principal da corrida."""
 
     permission_classes = [AllowAny]
 
@@ -112,17 +94,6 @@ class AtualizarStatusCorridaView(APIView):
 
         if novo not in {"accepted", "started", "rejected", "cancelled", "completed"}:
             return Response({"erro": "Status inválido."}, status=400)
-
-        def _devolver():
-            """
-            Devolve os assentos ao EcoTaxi. Sempre deve ser chamado quando a corrida for
-            cancelada ou concluída, pois os assentos já foram debitados na criação da corrida.
-            """
-            if corrida.eco_taxi_id:
-                Dispositivo.objects.filter(pk=corrida.eco_taxi_id).update(
-                    assentos_disponiveis=F("assentos_disponiveis") + corrida.assentos_necessarios,
-                    status="aguardando",
-                )
 
         if novo == "rejected":
             with transaction.atomic():
@@ -135,7 +106,6 @@ class AtualizarStatusCorridaView(APIView):
 
         if novo == "cancelled":
             with transaction.atomic():
-                _devolver()
                 corrida.eco_taxi = None
                 corrida.status = "cancelled"
                 corrida.save(update_fields=["eco_taxi", "status"])
@@ -143,7 +113,6 @@ class AtualizarStatusCorridaView(APIView):
 
         if novo == "completed":
             with transaction.atomic():
-                _devolver()
                 corrida.status = "completed"
                 corrida.save(update_fields=["status"])
             return Response({"mensagem": "Corrida concluída."})
@@ -246,16 +215,8 @@ class AceitarCorridaView(APIView):
         taxi = get_object_or_404(Dispositivo, pk=eco_id, tipo="ecotaxi")
 
         with transaction.atomic():
-            # débito único
-            if taxi.assentos_disponiveis < corrida.assentos_necessarios:
-                return Response({"erro": "Assentos insuficientes."}, status=400)
-
-            taxi.assentos_disponiveis = (
-                F("assentos_disponiveis") - corrida.assentos_necessarios
-            )
             taxi.status = "aguardando_resposta"
-            taxi.save(update_fields=["assentos_disponiveis", "status"])
-            taxi.refresh_from_db()  # ← ESSENCIAL para evitar CombinedExpression no serializer
+            taxi.save(update_fields=["status"])
 
             corrida.status = "accepted"
             corrida.save(update_fields=["status"])
@@ -317,12 +278,11 @@ class CorridasView(APIView):
                         pend, many=True
                     ).data,
                     "historico": CorridaEcoTaxiListSerializer(hist, many=True).data,
-                    "info_dispositivo": {
-                        "nome": disp.nome,
-                        "status": disp.status,
-                        "assentos_disponiveis": disp.assentos_disponiveis,
-                        "cor_ecotaxi": disp.cor_ecotaxi,
-                    },
+                        "info_dispositivo": {
+                            "nome": disp.nome,
+                            "status": disp.status,
+                            "cor_ecotaxi": disp.cor_ecotaxi,
+                        },
                 }
             )
 
@@ -394,7 +354,7 @@ class TrocarMotoristaView(APIView):
         if corrida.status not in ["pending", "accepted", "started"]:
             return Response({"erro": "Apenas corridas ativas podem trocar motorista."}, status=400)
 
-        # 2) escolhe outro ecotaxi (pela UUID) e NÃO debita assentos ainda
+        # 2) escolhe outro ecotaxi (pela UUID)
         excluir = (
             str(corrida.eco_taxi.uuid)
             if corrida.eco_taxi is not None
@@ -403,9 +363,7 @@ class TrocarMotoristaView(APIView):
         novo = escolher_ecotaxi(
             corrida.latitude_partida,
             corrida.longitude_partida,
-            corrida.assentos_necessarios,
             excluir_uuid=excluir,         # ✂ corrigido
-            debitar_assentos=False,       # ✂ certifica-se de NÃO debitar agora
         )
 
         if not novo:
@@ -413,13 +371,6 @@ class TrocarMotoristaView(APIView):
 
         # 3) faz a troca e renova expiração
         with transaction.atomic():
-            if corrida.status in ["accepted", "started"] and corrida.eco_taxi_id:
-                # devolve assentos ao antigo
-                Dispositivo.objects.filter(pk=corrida.eco_taxi_id).update(
-                    assentos_disponiveis=F("assentos_disponiveis") + corrida.assentos_necessarios,
-                    status="aguardando"
-                )
-
             corrida.eco_taxi = novo
             corrida.status = "pending"
             corrida.expiracao = timezone.now() + timedelta(minutes=5)

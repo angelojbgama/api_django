@@ -1,6 +1,5 @@
 from django.contrib import admin
 from .models import Dispositivo, SolicitacaoCorrida
-from django.db.models import F
 
 
 @admin.register(Dispositivo)
@@ -31,15 +30,3 @@ class SolicitacaoCorridaAdmin(admin.ModelAdmin):
     autocomplete_fields = ('passageiro', 'eco_taxi')
     readonly_fields = ('criada_em', 'expiracao')
 
-    def save_model(self, request, obj, form, change):
-        if change:
-            # Recupera o estado anterior
-            original = SolicitacaoCorrida.objects.get(pk=obj.pk)
-            if original.status != obj.status:
-                # Se mudou para cancelled ou completed, devolve assentos
-                if obj.status in {"cancelled", "completed"} and obj.eco_taxi:
-                    Dispositivo.objects.filter(pk=obj.eco_taxi_id).update(
-                        assentos_disponiveis=F("assentos_disponiveis") + obj.assentos_necessarios,
-                        status="aguardando"
-                    )
-        super().save_model(request, obj, form, change)

@@ -8,7 +8,7 @@ API desenvolvida em Django REST Framework para conectar passageiros a motoristas
 
 - Registro automático de passageiros e motoristas (via UUID do dispositivo).
 - EcoTaxis possuem estados: aguardando, em trânsito ou fora de serviço.
-- Solicitação de corrida baseada na geolocalização e número de assentos disponíveis.
+- Solicitação de corrida baseada exclusivamente na geolocalização.
 - Distribuição automática da corrida para o EcoTaxi mais próximo.
 - Corridas possuem status automáticos: `pending`, `accepted`, `rejected`, `cancelled`, `completed`, `expired`.
 - Expiração automática de solicitação após 1 minuto sem resposta.
@@ -28,13 +28,13 @@ API desenvolvida em Django REST Framework para conectar passageiros a motoristas
 - `nome`: nome do motorista.
 - `latitude`, `longitude`: localização atual.
 - `status`: `aguardando`, `transito`, `fora`.
-- `assentos_disponiveis`: total de assentos no veículo.
+- `assentos_disponiveis`: campo opcional apenas para referência visual.
 
 ### `SolicitacaoCorrida`
 - `passageiro`: referência ao passageiro.
 - `eco_taxi`: EcoTaxi que aceitou a corrida (pode estar vazio).
 - `latitude_destino`, `longitude_destino`, `endereco_destino`
-- `assentos_necessarios`
+- `assentos_necessarios` (mantido apenas para compatibilidade, sem influência na lógica).
 - `status`: `pending`, `accepted`, `rejected`, `cancelled`, `completed`, `expired`.
 - `expiracao`: 1 minuto após criação.
 
@@ -61,6 +61,5 @@ Content-Type: application/json
   "passageiro": 1,
   "latitude_destino": -22.767,
   "longitude_destino": -43.108,
-  "endereco_destino": "Rua das Flores, 123",
-  "assentos_necessarios": 2
+  "endereco_destino": "Rua das Flores, 123"
 }

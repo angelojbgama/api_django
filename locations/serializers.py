@@ -117,20 +117,9 @@ class DispositivoUpdateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         dispositivo: Dispositivo = self.instance  # já carregado na view
 
-        # Passageiro NÃO pode enviar cor nem assentos
-        if dispositivo.tipo == "passageiro":
-            bloqueados = {"cor_ecotaxi", "assentos_disponiveis"} & attrs.keys()
-            if bloqueados:
-                raise serializers.ValidationError(
-                    {k: "Somente EcoTaxi pode alterar este campo." for k in bloqueados}
-                )
-
-        # Se assentos vier, cheque intervalo aceitável (1-5)
-        if "assentos_disponiveis" in attrs:
-            assentos = attrs["assentos_disponiveis"]
-            if not (1 <= assentos <= 5):
-                raise serializers.ValidationError(
-                    {"assentos_disponiveis": "Valor deve estar entre 1 e 5."}
-                )
+        if dispositivo.tipo == "passageiro" and "cor_ecotaxi" in attrs:
+            raise serializers.ValidationError(
+                {"cor_ecotaxi": "Somente EcoTaxi pode alterar este campo."}
+            )
 
         return attrs
